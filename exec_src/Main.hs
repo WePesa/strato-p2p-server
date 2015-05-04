@@ -55,6 +55,8 @@ import           Blockchain.Handshake
 import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
+import qualified Blockchain.AESCTR as AES
+import           Blockchain.Handshake
 
 import qualified Database.Persist            as P
 import qualified Database.Esqueleto          as E
@@ -82,7 +84,8 @@ import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
 import           Crypto.Random
 import qualified Crypto.Hash.SHA3 as SHA3
-import           Blockchain.Handshake
+import           Crypto.Cipher.AES
+
 import           Data.Bits
 
 data AppState = AppState { sqlDB :: SQL.ConnectionPool, server :: Server }
@@ -333,6 +336,12 @@ theCurve = getCurveByName SEC_p256k1
 ethHPrvKey ::H.PrvKey
 Just ethHPrvKey = H.makePrvKey 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38d
 
+add :: BS.ByteString->BS.ByteString->BS.ByteString
+add acc val | BS.length acc ==32 && BS.length val == 32 = SHA3.hash 256 $ val `BS.append` acc
+add _ _ = error "add called with ByteString of length not 32"
+
+intToBytes::Integer->[Word8]
+intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
 
 tcpHandshakeServer :: PrivateNumber -> ConduitM BS.ByteString BS.ByteString IO ()
 tcpHandshakeServer prv = go
@@ -394,9 +403,46 @@ tcpHandshakeServer prv = go
     lift $ putStrLn $ "sending back: " ++ (show $ eceisMsg)
     yield $ eceisMsgBytes
 
-    nextMsg <- await
-    lift $ putStrLn $ "probably the Hello Message, encrypted: " ++ (show nextMsg)
+    let SharedKey sharedKey2 = getShared theCurve myPriv otherPoint
+    
+    lift $ putStrLn $ "shared key 2: " ++ (show sharedKey2)
+
+
+    let otherNonce = BS.take 32 $ BS.drop 161 $ msgBytes
+        myNonceBS = BS.pack $ word256ToBytes myNonce
+        shared2' = BS.pack $ intToBytes sharedKey2
+
+        frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
+        macEncKey = frameDecKey `add` shared2'
         
+    lift $  putStrLn $ "otherNonce: " ++ (show otherNonce)
+    lift $  putStrLn $ "myNonce:    " ++ (show myNonceBS)
+ 
+    lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show  (otherNonce `add` myNonceBS))
+    lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ (otherNonce `add` myNonceBS) `add` shared2' )
+    
+    lift $  putStrLn $ "length: otherNonce " ++ (show . BS.length $ otherNonce)
+    lift $  putStrLn $ "frameDecKey: " ++ (show frameDecKey)
+    lift $  putStrLn $ "macEncKey: " ++ (show macEncKey)
+    
+    nextMsgL <- CBN.take 176
+    let nextMsg = BL.toStrict nextMsgL
+        
+    lift $ putStrLn $ "probably the Hello Message, encrypted: " ++ (show nextMsg)
+    let nextMsgDec  = snd $ (AES.decrypt (AES.AESCTRState (initAES frameDecKey) (AES.aesIV_ $ BS.replicate 16 0) 0) nextMsg)
+    lift $ putStrLn $ "decrypted: " ++ (show $ nextMsgDec)
+    
+    
+    let packetType = fromInteger $ rlpDecode $ rlpDeserialize $ BS.take 1 nextMsgDec
+
+    lift $ putStrLn $ "packetType: " ++ (show packetType)
+  
+    let packetData =  BS.drop 1 nextMsgDec
+
+    lift $ putStrLn $ "packetData: " ++ (show packetData)
+--    lift $ putStrLn $ "unRLPed:   " ++ (show $ obj2WireMessage packetType packetData)
+
+    
 main :: IO ()
 main = do
   entropyPool <- liftIO createEntropyPool
