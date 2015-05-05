@@ -57,6 +57,7 @@ import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
+import           Blockchain.DBM
 
 import qualified Database.Persist            as P
 import qualified Database.Esqueleto          as E
@@ -88,7 +89,8 @@ import           Crypto.Cipher.AES
 
 import           Data.Bits
 
-data AppState = AppState { sqlDB :: SQL.ConnectionPool, server :: Server }
+{-
+  data AppState = AppState { sqlDB :: SQL.ConnectionPool, server :: Server }
 type AppStateM = StateT AppState (ResourceT IO)
 
 
@@ -98,7 +100,7 @@ getBlock appState n = SQL.runSqlPersistMPool actions $ (sqlDB appState)
                                    E.where_ ( (bdRef E.^. BlockDataRefNumber E.==. E.val n ) E.&&. ( bdRef E.^. BlockDataRefBlockId E.==. block E.^. BlockId ))
                                    return block
                                
-connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
+
 
 initState :: ResourceT IO AppState
 initState = do
@@ -106,7 +108,6 @@ initState = do
   sqldb <- runNoLoggingT  $ SQL.createPostgresqlPool connStr 20
   SQL.runSqlPool (SQL.runMigration migrateAll) sqldb
   return $ AppState { sqlDB = sqldb, server = serv }
-
  
 type ClientName = BS.ByteString
  
@@ -264,7 +265,7 @@ removeClient :: AppState -> Client -> IO ()
 removeClient appState client@Client{..} = atomically $ do
     modifyTVar' (clients $ server $ appState) $ Map.delete clientName
     broadcast (server appState) $ Notice (clientName <++> " has disconnected")
-
+-}
 portS = "30303"
 
 thePort :: Int
@@ -289,15 +290,15 @@ handler prv conn = do
          
    let yIsOdd = v == 1
 
-   putStrLn $ "r:       " ++ (show r)
-   putStrLn $ "s:       " ++ (show s)
-   putStrLn $ "v:       " ++ (show v)
-   putStrLn $ "theHash: " ++ (show $ theHash)
+  -- putStrLn $ "r:       " ++ (show r)
+  -- putStrLn $ "s:       " ++ (show s)
+  -- putStrLn $ "v:       " ++ (show v)
+  -- putStrLn $ "theHash: " ++ (show $ theHash)
         
    let extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
 
 
-   putStrLn $ show $ hPubKeyToPubKey $ getPubKeyFromSignature extSig (bytesToWord256 theHash)
+   -- putStrLn $ show $ hPubKeyToPubKey $ getPubKeyFromSignature extSig (bytesToWord256 theHash)
    -- putStrLn $ show $ hPubKeyToPubKey $ derivePubKey $ ethHPrvKey
 
    let (theType, theRLP) = ndPacketToRLP $
@@ -343,7 +344,7 @@ add _ _ = error "add called with ByteString of length not 32"
 intToBytes::Integer->[Word8]
 intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
 
-tcpHandshakeServer :: PrivateNumber -> ConduitM BS.ByteString BS.ByteString IO ()
+tcpHandshakeServer :: PrivateNumber -> ConduitM BS.ByteString BS.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv = go
   where
   go = do
@@ -351,25 +352,25 @@ tcpHandshakeServer prv = go
 
     let hsBytesStr = (BL.toStrict $ hsBytes)
         
-    let eceisMessage = (BN.decode $ hsBytes :: ECEISMessage)
-    let msgBytes = (decryptECEIS  prv eceisMessage )
+    let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
+    let eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
 --        lift $ putStrLn $ "pubkey, maybe: " ++ (show $ bytesToPoint $ BS.unpack $ BS.take 64 (BS.drop 1 msgBytes))
     let otherPoint = bytesToPoint $ BS.unpack $ BS.take 64 (BS.drop 1 hsBytesStr)
 
     let iv =  BS.replicate 16 0
             
   --  lift $ putStrLn $ "received from pubkey: " ++ (show otherPoint)
-    lift $ putStrLn $ "received: " ++ (show . BS.length $ hsBytesStr) ++ " bytes "
+ --   lift $ putStrLn $ "received: " ++ (show . BS.length $ hsBytesStr) ++ " bytes "
 
-    lift $ putStrLn $ "received msg: " ++ (show eceisMessage)
-    lift $ putStrLn $ "ciphertext bytes: " ++ (show . BS.length $ eceisCipher eceisMessage)
+  --  lift $ putStrLn $ "received msg: " ++ (show eceisMessage)
+  --  lift $ putStrLn $ "ciphertext bytes: " ++ (show . BS.length $ eceisCipher eceisMessage)
         
-    lift $ putStrLn $ "decrypted msg bytes: " ++ (show . BS.length $ msgBytes)
-    lift $ putStrLn $ "decrypted msg: " ++ (show $ msgBytes)
+  --  lift $ putStrLn $ "decrypted msg bytes: " ++ (show . BS.length $ msgBytes)
+  --  lift $ putStrLn $ "decrypted msg: " ++ (show $ msgBytes)
 
     let SharedKey sharedKey = getShared theCurve prv otherPoint
 
-    lift $ putStrLn $ "shared key: " ++ (show sharedKey)
+  --  lift $ putStrLn $ "shared key: " ++ (show sharedKey)
 
    --     let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msgBytes
      --   let s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msgBytes
@@ -388,7 +389,7 @@ tcpHandshakeServer prv = go
         
     let myNonce = 25 :: Word256
 
-    lift $ putStrLn $ "my ephemeral: " ++ (show $ myEphemeral)
+--    lift $ putStrLn $ "my ephemeral: " ++ (show $ myEphemeral)
         -- let otherNonce = (BL.toStrict $ BN.encode sharedKey) `bXor` (BS.take 32 $ BS.drop 64 msgBytes)
             
      --    lift $ putStrLn $ "otherNonce: " ++ (show $ otherNonce)
@@ -397,52 +398,68 @@ tcpHandshakeServer prv = go
 
     let ackMsg = AckMessage { ackEphemeralPubKey = myEphemeral, ackNonce=myNonce, ackKnownPeer=False } 
             
-    let eceisMsg = encryptECEIS prv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
-    let eceisMsgBytes = BL.toStrict $ BN.encode eceisMsg
+    let eceisMsgOutgoing = encryptECEIS prv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
+    let eceisMsgOBytes = BL.toStrict $ BN.encode eceisMsgOutgoing
             
-    lift $ putStrLn $ "sending back: " ++ (show $ eceisMsg)
-    yield $ eceisMsgBytes
+--    lift $ putStrLn $ "sending back: " ++ (show $ eceisMsgOutgoing)
+    yield $ eceisMsgOBytes
 
     let SharedKey sharedKey2 = getShared theCurve myPriv otherPoint
     
     lift $ putStrLn $ "shared key 2: " ++ (show sharedKey2)
 
 
-    let otherNonce = BS.take 32 $ BS.drop 161 $ msgBytes
+    let otherNonce = BS.take 32 $ BS.drop 161 $ eceisMsgIBytes
         myNonceBS = BS.pack $ word256ToBytes myNonce
         shared2' = BS.pack $ intToBytes sharedKey2
 
         frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
         macEncKey = frameDecKey `add` shared2'
         
-    lift $  putStrLn $ "otherNonce: " ++ (show otherNonce)
-    lift $  putStrLn $ "myNonce:    " ++ (show myNonceBS)
+  --  lift $  putStrLn $ "otherNonce: " ++ (show otherNonce)
+  --  lift $  putStrLn $ "myNonce:    " ++ (show myNonceBS)
  
-    lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show  (otherNonce `add` myNonceBS))
-    lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ (otherNonce `add` myNonceBS) `add` shared2' )
+  --  lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show  (otherNonce `add` myNonceBS))
+  --  lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ (otherNonce `add` myNonceBS) `add` shared2' )
     
-    lift $  putStrLn $ "length: otherNonce " ++ (show . BS.length $ otherNonce)
-    lift $  putStrLn $ "frameDecKey: " ++ (show frameDecKey)
-    lift $  putStrLn $ "macEncKey: " ++ (show macEncKey)
+ --  lift $  putStrLn $ "length: otherNonce " ++ (show . BS.length $ otherNonce)
+  --  lift $  putStrLn $ "frameDecKey: " ++ (show frameDecKey)
+  --  lift $  putStrLn $ "macEncKey: " ++ (show macEncKey)
+
+ 
+--    let ingressCipher = eceisCipher eceisMsgIncoming
+  --      egressCipher = eceisCipher eceisMsgOutgoing 
+
+
+    let cState =
+          EthCryptStateLite {
+            encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ BS.replicate 16 0) 0,
+            decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ BS.replicate 16 0) 0,
+            egressMAC=SHA3.update (SHA3.init 256) $
+                     (macEncKey `bXor` otherNonce) `BS.append` eceisMsgOBytes,
+            egressKey=macEncKey,
+            ingressMAC=SHA3.update (SHA3.init 256) $ 
+                     (macEncKey `bXor` myNonceBS) `BS.append` (BL.toStrict hsBytes),
+            ingressKey=macEncKey
+          }
+{-
+    lift $ putStrLn $ "egressCipher: " ++ (show egressCipher)
+    lift $ putStrLn $ "length egressCipher: " ++ (show $ BS.length egressCipher)
     
-    nextMsgL <- CBN.take 176
-    let nextMsg = BL.toStrict nextMsgL
+    lift $ putStrLn $ "ingressCipher: " ++ (show ingressCipher)
+    lift $ putStrLn $ "length ingressCipher: " ++ (show $ BS.length ingressCipher)
+-}
+--    lift $ putStrLn $ "state: " ++ (show cState)
+    return cState
+   --    nextMsgL <- CBN.take 176
+--    let nextMsg = BL.toStrict nextMsgL
         
-    lift $ putStrLn $ "probably the Hello Message, encrypted: " ++ (show nextMsg)
-    let nextMsgDec  = snd $ (AES.decrypt (AES.AESCTRState (initAES frameDecKey) (AES.aesIV_ $ BS.replicate 16 0) 0) nextMsg)
-    lift $ putStrLn $ "decrypted: " ++ (show $ nextMsgDec)
-    
-    
-    let packetType = fromInteger $ rlpDecode $ rlpDeserialize $ BS.take 1 nextMsgDec
+--    lift $ putStrLn $ "probably the Hello Message, encrypted: " ++ (show nextMsg)
 
-    lift $ putStrLn $ "packetType: " ++ (show packetType)
-  
-    let packetData =  BS.drop 1 nextMsgDec
-
-    lift $ putStrLn $ "packetData: " ++ (show packetData)
 --    lift $ putStrLn $ "unRLPed:   " ++ (show $ obj2WireMessage packetType packetData)
 
-    
+connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
+
 main :: IO ()
 main = do
   entropyPool <- liftIO createEntropyPool
@@ -455,12 +472,29 @@ main = do
   
   S.withSocketsDo $ bracket connectMe S.sClose (handler (H.PrvKey $ fromIntegral myPriv))
 
-  runTCPServer (serverSettings thePort "*") $ \app -> do
-    (initCond,_) <-
-      appSource app $$+ (tcpHandshakeServer myPriv) `fuseUpstream` appSink app
-      
---    void $ initCond $$++ recvMsgConduit =$= handleMsgConduit =$= initCond
+  let cxt = initContextLite
+
+  runResourceT $ do
+    db <- openDBsLite connStr
+    _ <- flip runStateT db $
+           flip runStateT cxt $
+                  lift $ lift $ lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
+                    (initCond,cState) <-
+                      appSource app $$+ (tcpHandshakeServer myPriv) `fuseUpstream` appSink app
+                    (unwrap, _) <- unwrapResumable initCond
+                    runResourceT $ do
+                       _ <- flip runStateT db $
+                         flip runStateT cxt $
+                           flip runStateT cState $ 
+                            (transPipe (lift . lift . lift . lift) unwrap) $$
+                              recvMsgConduit =$= handleMsgConduit  `fuseUpstream` appSink app
+                   
+                       return ()
+
+
+                     
     return ()
+
   {-
   runResourceT $ do
         appState <- initState
@@ -471,5 +505,5 @@ main = do
                 `finally` (removeClient appState client)
         return ()
 -}
-  return ()
- 
+    
+  

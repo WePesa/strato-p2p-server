@@ -5,7 +5,9 @@ module Blockchain.CommunicationConduit (
   handleMsgConduit,
   sendMsgConduit,
   recvMsgConduit,
-  bXor
+  bXor,
+  EthCryptStateLite(..),
+  EthCryptMLite(..)
   ) where
 
 import Control.Monad.Trans.State
@@ -31,7 +33,8 @@ import Blockchain.SHA
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.RLP
 import Blockchain.Data.Wire
-
+import Blockchain.Data.DataDefs
+import Blockchain.DBM
 import Blockchain.RLPx
 import Blockchain.ContextLite
 
@@ -41,6 +44,8 @@ import qualified Data.Conduit.Binary as CBN
 
 import Data.Conduit.Serialization.Binary
 import Data.Bits
+
+import qualified Database.Esqueleto as E
 
 data EthCryptStateLite =
   EthCryptStateLite {
@@ -57,17 +62,19 @@ type EthCryptMLite a = StateT EthCryptStateLite a
 
 ethVersion :: Int
 ethVersion = 60
+
  
 handleMsgConduit :: Conduit Message (EthCryptMLite ContextMLite) B.ByteString
 handleMsgConduit = awaitForever $ \m ->
    case m of
        Hello{} -> do
+             h <- lift $ getBestBlockHash
              sendMsgConduit Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID="",
                               totalDifficulty=0,
-                              latestHash=(SHA 0),   -- fix these
-                              genesisHash=(SHA 0)   -- 
+                              latestHash=h,
+                              genesisHash=(SHA 0xfd4af92a79c7fc2fd8bf0d342f2e832e1d4f485c85b9152d2039e03bc604fdca)   
                             }
        Ping -> do
          _ <- lift $ lift $  addPingCountLite
@@ -109,16 +116,24 @@ sendMsgConduit msg = do
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
   
 
-recvMsgConduitBS :: MonadIO m => Conduit B.ByteString (EthCryptMLite m) B.ByteString
-recvMsgConduitBS = do
+recvMsgConduit :: MonadIO m => Conduit B.ByteString (EthCryptMLite m) Message
+recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
+
+ -- liftIO $ putStrLn $ "headCipher: " ++ (show headCipher)
+ -- liftIO $ putStrLn $ "headMAC:    " ++ (show headMAC)
   
   expectedHeadMAC <- lift $ updateIngressMac $ (BL.toStrict headCipher)
+
+  -- liftIO $ putStrLn $ "expected: " ++ (show expectedHeadMAC)
+  
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error "oops, head mac isn't what I expected"
 
   header <- lift $ decrypt (BL.toStrict headCipher)
 
+  -- liftIO $ putStrLn $ "header: " ++ (show header)
+  
   let frameSize = 
         (fromIntegral (header `B.index` 0) `shiftL` 16) +
         (fromIntegral (header `B.index` 1) `shiftL` 8) +
@@ -134,22 +149,14 @@ recvMsgConduitBS = do
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
 
   fullFrame <- lift $ decrypt (BL.toStrict frameCipher)
+
+  -- liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
-  yield $ B.take frameSize fullFrame
+  let frameData = B.take frameSize fullFrame
+      packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
+      packetData = rlpDeserialize $ B.drop 1 frameData
 
-
-recvMsgConduit :: MonadIO m => Conduit B.ByteString (EthCryptMLite m) Message
-recvMsgConduit = do
-  frameDataMaybe <- await
-
-  case frameDataMaybe of
-    (Just frameData) -> do
-        let packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
-            packetData = rlpDeserialize $ B.drop 1 frameData
-
-        yield  $ obj2WireMessage packetType packetData
-
-    Nothing -> recvMsgConduit
+  yield  $ obj2WireMessage packetType packetData
       
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 
@@ -215,41 +222,16 @@ updateIngressMac value = do
   rawUpdateIngressMac $
     value `bXor` (encryptECB (initAES $ ingressKey cState) (B.take 16 $ SHA3.finalize mac))
 
-{-
-runEthCryptMLite::MonadIO m=>PrivateNumber->PublicPoint->EthCryptMLite m a->m a
-runEthCryptMLite myPriv otherPubKey actions = do
- ------------------------------
+getBestBlockHash :: (EthCryptMLite ContextMLite) SHA
+getBestBlockHash = do
+  cxt <- lift $ lift $ get
+  blks <-  E.runSqlPool actions $ sqlDBLite cxt
 
-  let m_originated=True
-      add::B.ByteString->B.ByteString->B.ByteString
-      add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
-      add _ _ = error "add called with ByteString of length not 32"
+  return $ head $ map blockDataRefHash (map E.entityVal (blks :: [E.Entity BlockDataRef])) 
+  
+  where actions =   E.select $
+                       E.from $ \(bdRef) -> do
+                       E.limit $ 1 
+                       E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
+                       return bdRef
 
-      otherNonce=B.pack $ word256ToBytes $ ackNonce ackMsg
-
-      SharedKey shared' = getShared theCurve myPriv (ackEphemeralPubKey ackMsg)
-      shared = B.pack $ intToBytes shared'
-
-      frameDecKey = myNonce `add` otherNonce `add` shared `add` shared
-      macEncKey = frameDecKey `add` shared
-
-      ingressCipher = if m_originated then handshakeInitBytes else handshakeReplyBytes
-      egressCipher = if m_originated then handshakeReplyBytes else handshakeInitBytes
-
-
-  let cState =
-        EthCryptState {
-          encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-          decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-          egressMAC=SHA3.update (SHA3.init 256) $
-                    (macEncKey `bXor` otherNonce) `B.append` egressCipher,
-          egressKey=macEncKey,
-          ingressMAC=SHA3.update (SHA3.init 256) $ 
-                     (macEncKey `bXor` myNonce) `B.append` ingressCipher,
-          ingressKey=macEncKey
-          }
-
-  (ret, _) <- flip runStateT cState actions
-
-  return ret
--}

@@ -4,7 +4,8 @@ module Blockchain.ContextLite (
   ContextLite(..),
   ContextMLite,
   isDebugEnabled,
-  addPingCountLite
+  addPingCountLite,
+  initContextLite
   ) where
 
 
@@ -12,8 +13,6 @@ import Control.Monad.IfElse
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Resource
-import qualified Data.Vector as V
-
 
 import Blockchain.Constants
 import Blockchain.DBM
@@ -40,6 +39,15 @@ data ContextLite =
     }
 
 type ContextMLite = StateT ContextLite DBMLite
+
+
+initContextLite :: ContextLite
+initContextLite = ContextLite {
+                    neededBlockHashes = [],
+                    pingCount = 0,
+                    peers = [],
+                    debugEnabled = False
+                   }
 
 isDebugEnabled::ContextMLite Bool
 isDebugEnabled = do
