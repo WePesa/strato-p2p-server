@@ -57,8 +57,8 @@ executable p2p-server
                        crypto-random,
                        nibblestring,
                        vector,
-                       IfElse
-
+                       IfElse,
+                       postgresql-simple
   hs-source-dirs: exec_src
   default-language: Haskell2010      
 
@@ -102,8 +102,8 @@ library
                        crypto-random,
                        nibblestring,
                        vector,
-                       IfElse
-
+                       IfElse,
+                       postgresql-simple
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite

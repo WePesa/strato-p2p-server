@@ -65,7 +65,9 @@ ethVersion = 60
 
  
 handleMsgConduit :: Conduit Message (EthCryptMLite ContextMLite) B.ByteString
-handleMsgConduit = awaitForever $ \m ->
+handleMsgConduit = awaitForever $ \m -> do
+   liftIO $ putStrLn $ "received message: " ++ (show m)
+   
    case m of
        Hello{} -> do
              h <- lift $ getBestBlockHash
@@ -89,7 +91,7 @@ handleMsgConduit = awaitForever $ \m ->
        NewBlockPacket block baseDifficulty -> undefined
        Status{latestHash=lh, genesisHash=gh} -> undefined
        GetTransactions -> undefined
-       _ -> undefined     
+       _ -> liftIO $ putStrLn $ "unrecognized message"     
 
 
 sendMsgConduit :: MonadIO m => Message -> Producer (EthCryptMLite m) B.ByteString
@@ -121,18 +123,18 @@ recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
 
- -- liftIO $ putStrLn $ "headCipher: " ++ (show headCipher)
- -- liftIO $ putStrLn $ "headMAC:    " ++ (show headMAC)
+  liftIO $ putStrLn $ "headCipher: " ++ (show headCipher)
+  liftIO $ putStrLn $ "headMAC:    " ++ (show headMAC)
   
   expectedHeadMAC <- lift $ updateIngressMac $ (BL.toStrict headCipher)
 
-  -- liftIO $ putStrLn $ "expected: " ++ (show expectedHeadMAC)
+  liftIO $ putStrLn $ "expected: " ++ (show expectedHeadMAC)
   
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error "oops, head mac isn't what I expected"
 
   header <- lift $ decrypt (BL.toStrict headCipher)
 
-  -- liftIO $ putStrLn $ "header: " ++ (show header)
+  liftIO $ putStrLn $ "header: " ++ (show header)
   
   let frameSize = 
         (fromIntegral (header `B.index` 0) `shiftL` 16) +
@@ -147,10 +149,9 @@ recvMsgConduit = do
   expectedFrameMAC <- lift $ updateIngressMac =<< rawUpdateIngressMac (BL.toStrict frameCipher)
 
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
-
   fullFrame <- lift $ decrypt (BL.toStrict frameCipher)
 
-  -- liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
+  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
