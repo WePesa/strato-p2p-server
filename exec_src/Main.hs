@@ -86,6 +86,8 @@ import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
 import           Crypto.Random
 import qualified Crypto.Hash.SHA3 as SHA3
+import qualified Crypto.Hash.SHA256 as SHA256
+
 import           Crypto.Cipher.AES
 
 import           Data.Bits
@@ -110,8 +112,12 @@ udpHandshakeServer :: H.PrvKey -> TContext -> S.Socket  -> IO ()
 udpHandshakeServer prv cxt conn = do
    (msg,addr) <- NB.recvFrom conn 1280
 
-   putStrLn $ "from addr: " ++ show addr
+   --   putStrLn $ "from addr: " ++ showaddr
+   let ip = sockAddrToIP addr
 
+
+   putStrLn $ "connection from ip: " ++ ip
+   
    let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msg
        s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msg
        v = head . BS.unpack $ BS.take 1 $ BS.drop 96 msg
@@ -142,7 +148,7 @@ udpHandshakeServer prv cxt conn = do
 
   -- let otherPubkey = getPubKeyFromSignature extSig (bytesToWord256 theHash)
    putStrLn $ "other pubkey: " ++ (show $ B16.encode $ BS.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
-   putStrLn $ "other pubkey as point: " ++ (show otherPubkey)
+   putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
    
    --  putStrLn $ show $ hPubKeyToPubKey $ derivePubKey $ ethHPrvKey
 
@@ -175,7 +181,7 @@ udpHandshakeServer prv cxt conn = do
    let prevPeers = peers cxt'
        
    putStrLn $ "does execution ever reach this point, after read before write.... in udpHandshakeServer"
-   atomically $ writeTVar cxt (cxt'{peers=(Map.insert addr otherPubkey prevPeers)} )
+   atomically $ writeTVar cxt (cxt'{peers=(Map.insert ip (hPubKeyToPubKey otherPubkey) prevPeers)} )
 
 
 --   cxt'' <- readTVarIO cxt
@@ -215,8 +221,14 @@ add _ _ = error "add called with ByteString of length not 32"
 intToBytes::Integer->[Word8]
 intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
 
-tcpHandshakeServer :: PrivateNumber -> ConduitM BS.ByteString BS.ByteString IO EthCryptStateLite
-tcpHandshakeServer prv = go
+ctr::[Word8]
+ctr=[0,0,0,1]
+
+s1::[Word8]
+s1 = []
+
+tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM BS.ByteString BS.ByteString IO EthCryptStateLite
+tcpHandshakeServer prv otherPoint = go
   where
   go = do
     hsBytes <- CBN.take 307
@@ -224,14 +236,20 @@ tcpHandshakeServer prv = go
     let hsBytesStr = (BL.toStrict $ hsBytes)
         
     let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
-    let eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
+        eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
+
+    lift $ putStrLn $ "length of decrypted message: " ++ (show $ BS.length eceisMsgIBytes)
+    lift $ putStrLn $ "decrypted message: " ++ (show $ BS.unpack eceisMsgIBytes)
+    
+--    let otherEphemeralBytes = BS.unpack $ BS.take 64 $ BS.drop 1 hsBytesStr
+  --      otherEphemeral = bytesToPoint otherEphemeralBytes
 --        lift $ putStrLn $ "pubkey, maybe: " ++ (show $ bytesToPoint $ BS.unpack $ BS.take 64 (BS.drop 1 msgBytes))
-    let otherPointBytes = BS.unpack $ BS.take 64 (BS.drop 1 hsBytesStr)
-    let otherPoint = bytesToPoint $ otherPointBytes
+--    let otherPointBytes = BS.unpack $ BS.take 64 (BS.drop 1 hsBytesStr)
+--    let otherPoint = bytesToPoint $ otherPointBytes
     
     let iv = BS.replicate 16 0
             
-    lift $ putStrLn $ "received from pubkey: " ++ (show $ B16.encode $ BS.pack otherPointBytes)
+--    lift $ putStrLn $ "received from pubkey: " ++ (show $ B16.encode $ BS.pack otherPointBytes)
     lift $ putStrLn $ "received from pubkey: " ++ (show $ otherPoint)
     
  --   lift $ putStrLn $ "received: " ++ (show . BS.length $ hsBytesStr) ++ " bytes "
@@ -241,11 +259,21 @@ tcpHandshakeServer prv = go
         
   --  lift $ putStrLn $ "decrypted msg bytes: " ++ (show . BS.length $ msgBytes)
 --    lift $ putStrLn $ "decrypted msg: " ++ (show $ eceisMsgIBytes)
+--    lift $ putStrLn $ "test: prv: " ++ (show prv)
+    
+    let SharedKey sharedKey = getShared theCurve prv otherPoint
+        otherNonce = BS.take 32 $ BS.drop 161 $ eceisMsgIBytes
+        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ BS.unpack otherNonce)
+        r = bytesToWord256 $ BS.unpack $ BS.take 32 $ eceisMsgIBytes
+        s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ eceisMsgIBytes
+        v = head . BS.unpack $ BS.take 1 $ BS.drop 64 eceisMsgIBytes
+        yIsOdd = v == 1
 
---    let SharedKey sharedKey = getShared theCurve prv otherPoint
+        extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
 
-  --  lift $ putStrLn $ "shared key: " ++ (show sharedKey)
 
+              -- let otherPubkey = getPubKeyFromSignature extSig (bytesToWord256 theHash)  
+        otherEphemeral = hPubKeyToPubKey $ getPubKeyFromSignature extSig msg
    --     let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msgBytes
      --   let s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msgBytes
 --        lift $ putStrLn $ "last byte of msg: " ++ show (BS.drop 96 msgBytes)
@@ -281,25 +309,32 @@ tcpHandshakeServer prv = go
 
     let SharedKey sharedKey2 = getShared theCurve myPriv otherPoint
     
-    lift $ putStrLn $ "shared key 2: " ++ (show sharedKey2)
+    lift $ putStrLn $ "shared key 2: " ++ (show $ intToBytes sharedKey2)
 
+    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
+        ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
+    lift $ putStrLn $ "otherEphemeral as a point: " ++ (show $ otherEphemeral)
+    lift $ putStrLn $ "otherEphemeral bytes      : " ++ (show $ pointToBytes otherEphemeral)
+    lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
 
-    let otherNonce = BS.take 32 $ BS.drop 161 $ eceisMsgIBytes
-        myNonceBS = BS.pack $ word256ToBytes myNonce
+    let myNonceBS = BS.pack $ word256ToBytes myNonce
         shared2' = BS.pack $ intToBytes sharedKey2
 
-        frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
-        macEncKey = frameDecKey `add` shared2'
+        -- frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
+        -- macEncKey = frameDecKey `add` shared2'
+
+        frameDecKey = otherNonce `add` myNonceBS `add` (BS.pack ephemeralSharedSecretBytes) `add` (BS.pack ephemeralSharedSecretBytes)
+        macEncKey = frameDecKey `add` (BS.pack ephemeralSharedSecretBytes)
         
-    lift $  putStrLn $ "otherNonce: " ++ (show otherNonce)
-    lift $  putStrLn $ "myNonce:    " ++ (show myNonceBS)
+--    lift $  putStrLn $ "otherNonce: " ++ (show $ BS.unpack otherNonce)
+ --   lift $  putStrLn $ "myNonce:    " ++ (show $ BS.unpack myNonceBS)
  
-    lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show  (otherNonce `add` myNonceBS))
-    lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ (otherNonce `add` myNonceBS) `add` shared2' )
+ --  lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show $ BS.unpack $ (otherNonce `add` myNonceBS))
+ --   lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ BS.unpack $ (otherNonce `add` myNonceBS) `add` shared2' )
     
  --  lift $  putStrLn $ "length: otherNonce " ++ (show . BS.length $ otherNonce)
-    lift $  putStrLn $ "frameDecKey: " ++ (show frameDecKey)
-    lift $  putStrLn $ "macEncKey: " ++ (show macEncKey)
+    lift $  putStrLn $ "frameDecKey: " ++ (show $ BS.unpack $ frameDecKey)
+    lift $  putStrLn $ "macEncKey: " ++ (show $ BS.unpack $ macEncKey)
 
  
 --    let ingressCipher = eceisCipher eceisMsgIncoming
@@ -334,6 +369,9 @@ tcpHandshakeServer prv = go
 --    lift $ putStrLn $ "unRLPed:   " ++ (show $ obj2WireMessage packetType packetData)
 
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
+
+sockAddrToIP :: S.SockAddr -> String
+sockAddrToIP addr = takeWhile (\t -> t /= ':') $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
 pointToBytes::Point->[Word8]
 pointToBytes (Point x y) = intToBytes x ++ intToBytes y
@@ -375,12 +413,12 @@ main = do
       --              putStrLn $ "connection: appSockAddr: " ++ (show (appSockAddr app))
         --            putStrLn $ "connection: appLocalAddr: " ++ (show (appLocalAddr app))
 
-          --          curr <- readTVarIO tCxt
+                    curr <- readTVarIO tCxt
             --        putStrLn $ "current context: " ++ (show curr)
 
                     async $ (listenForNotification (notifHandler cxt))  
                     (initCond,cState) <-
-                      appSource app $$+ (tcpHandshakeServer myPriv) `fuseUpstream` appSink app
+                      appSource app $$+ (tcpHandshakeServer myPriv ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
                     (unwrap, _) <- unwrapResumable initCond
 
                     putStrLn $ "connection established, now handling messages"

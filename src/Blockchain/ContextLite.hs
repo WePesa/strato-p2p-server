@@ -52,7 +52,7 @@ data ContextLite =
     newBlocks::[Block],        -- for propagating mined blocks, or possibly blocks at the head
     newTransactions::[Transaction],
     pingCount::Int,
-    peers:: Map.Map SockAddr PubKey,
+    peers:: Map.Map String Point,
     debugEnabled::Bool,
     notifHandler::PS.Connection
   } 

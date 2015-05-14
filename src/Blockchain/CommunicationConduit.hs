@@ -123,18 +123,18 @@ recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
 
-  liftIO $ putStrLn $ "headCipher: " ++ (show headCipher)
-  liftIO $ putStrLn $ "headMAC:    " ++ (show headMAC)
+  liftIO $ putStrLn $ "headCipher: " ++ (show $ B.unpack $ BL.toStrict headCipher)
+  liftIO $ putStrLn $ "headMAC:    " ++ (show $ B.unpack $ BL.toStrict headMAC)
   
   expectedHeadMAC <- lift $ updateIngressMac $ (BL.toStrict headCipher)
 
-  liftIO $ putStrLn $ "expected: " ++ (show expectedHeadMAC)
+  liftIO $ putStrLn $ "expected: " ++ (show $ B.unpack expectedHeadMAC)
   
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error "oops, head mac isn't what I expected"
 
   header <- lift $ decrypt (BL.toStrict headCipher)
 
-  liftIO $ putStrLn $ "header: " ++ (show header)
+  liftIO $ putStrLn $ "header: " ++ (show $ B.unpack header)
   
   let frameSize = 
         (fromIntegral (header `B.index` 0) `shiftL` 16) +
