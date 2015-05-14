@@ -6,7 +6,9 @@ module Blockchain.ContextLite (
   TContext,
  -- isDebugEnabled,
   addPingCountLite,
-  initContextLite
+  initContextLite,
+  EthCryptMLite(..),
+  EthCryptStateLite(..)
   ) where
 
 
@@ -17,6 +19,8 @@ import Control.Monad.Trans.Resource
 
 import Blockchain.Constants
 import Blockchain.DBM
+import qualified Data.ByteString as B
+import qualified Crypto.Hash.SHA3 as SHA3
 
 import Blockchain.Data.Address
 import Blockchain.Data.AddressStateDB
@@ -25,6 +29,7 @@ import Blockchain.Data.Transaction
 
 import Blockchain.Data.RLP
 import qualified Blockchain.Database.MerklePatricia as MPDB
+
 import Blockchain.ExtWord
 import Blockchain.SHA
 import Blockchain.Util
@@ -43,8 +48,19 @@ import Control.Concurrent.STM
 import qualified Data.Map as Map
 import qualified Database.PostgreSQL.Simple as PS
 import Database.PostgreSQL.Simple.Notification
+import qualified Blockchain.AESCTR as AES
 
+data EthCryptStateLite =
+  EthCryptStateLite {
+    encryptState::AES.AESCTRState,
+    decryptState::AES.AESCTRState,
+    egressMAC::SHA3.Ctx,
+    ingressMAC::SHA3.Ctx,
+    egressKey::B.ByteString,
+    ingressKey::B.ByteString
+    }
 
+type EthCryptMLite a = StateT EthCryptStateLite a
 
 data ContextLite =
   ContextLite {

@@ -5,9 +5,7 @@ module Blockchain.CommunicationConduit (
   handleMsgConduit,
   sendMsgConduit,
   recvMsgConduit,
-  bXor,
-  EthCryptStateLite(..),
-  EthCryptMLite(..)
+  bXor
   ) where
 
 import Control.Monad.Trans.State
@@ -37,6 +35,7 @@ import Blockchain.Data.DataDefs
 import Blockchain.DBM
 import Blockchain.RLPx
 import Blockchain.ContextLite
+import Blockchain.BlockSynchronizerSql
 
 import Conduit
 import Data.Conduit
@@ -47,22 +46,9 @@ import Data.Bits
 
 import qualified Database.Esqueleto as E
 
-data EthCryptStateLite =
-  EthCryptStateLite {
-    encryptState::AES.AESCTRState,
-    decryptState::AES.AESCTRState,
-    egressMAC::SHA3.Ctx,
-    ingressMAC::SHA3.Ctx,
-    egressKey::B.ByteString,
-    ingressKey::B.ByteString
-    }
-
-type EthCryptMLite a = StateT EthCryptStateLite a
-
 
 ethVersion :: Int
 ethVersion = 60
-
  
 handleMsgConduit :: Conduit Message (EthCryptMLite ContextMLite) B.ByteString
 handleMsgConduit = awaitForever $ \m -> do
@@ -222,17 +208,4 @@ updateIngressMac value = do
   let mac = ingressMAC cState
   rawUpdateIngressMac $
     value `bXor` (encryptECB (initAES $ ingressKey cState) (B.take 16 $ SHA3.finalize mac))
-
-getBestBlockHash :: (EthCryptMLite ContextMLite) SHA
-getBestBlockHash = do
-  cxt <- lift $ lift $ get
-  blks <-  E.runSqlPool actions $ sqlDBLite cxt
-
-  return $ head $ map blockDataRefHash (map E.entityVal (blks :: [E.Entity BlockDataRef])) 
-  
-  where actions =   E.select $
-                       E.from $ \(bdRef) -> do
-                       E.limit $ 1 
-                       E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
-                       return bdRef
 

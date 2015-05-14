@@ -112,7 +112,7 @@ udpHandshakeServer :: H.PrvKey -> TContext -> S.Socket  -> IO ()
 udpHandshakeServer prv cxt conn = do
    (msg,addr) <- NB.recvFrom conn 1280
 
-   --   putStrLn $ "from addr: " ++ showaddr
+   putStrLn $ "from addr: " ++ show addr
    let ip = sockAddrToIP addr
 
 
@@ -371,7 +371,7 @@ tcpHandshakeServer prv otherPoint = go
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
 sockAddrToIP :: S.SockAddr -> String
-sockAddrToIP addr = takeWhile (\t -> t /= ':') $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
+sockAddrToIP addr = takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
 pointToBytes::Point->[Word8]
 pointToBytes (Point x y) = intToBytes x ++ intToBytes y
