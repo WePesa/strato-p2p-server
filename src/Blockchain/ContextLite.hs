@@ -57,7 +57,8 @@ data EthCryptStateLite =
     egressMAC::SHA3.Ctx,
     ingressMAC::SHA3.Ctx,
     egressKey::B.ByteString,
-    ingressKey::B.ByteString
+    ingressKey::B.ByteString,
+    peerId::Point
     }
 
 type EthCryptMLite a = StateT EthCryptStateLite a

@@ -350,7 +350,8 @@ tcpHandshakeServer prv otherPoint = go
             egressKey=macEncKey,
             ingressMAC=SHA3.update (SHA3.init 256) $ 
                      (macEncKey `bXor` myNonceBS) `BS.append` (BL.toStrict hsBytes),
-            ingressKey=macEncKey
+            ingressKey=macEncKey,
+            peerId = calculatePublic theCurve prv
           }
 {-
     lift $ putStrLn $ "egressCipher: " ++ (show egressCipher)
@@ -371,6 +372,9 @@ tcpHandshakeServer prv otherPoint = go
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
 sockAddrToIP :: S.SockAddr -> String
+sockAddrToIP (S.SockAddrInet port host) = show host
+sockAddrToIP (S.SockAddrInet6 port _ host _) = show host
+sockAddrToIP (S.SockAddrUnix str) = str
 sockAddrToIP addr = takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
 pointToBytes::Point->[Word8]
@@ -432,6 +436,7 @@ main = do
                    
                        return ()
 
+                    putStrLn $ "closed session with: " ++ (show $ appSockAddr app)
 
                      
     return ()

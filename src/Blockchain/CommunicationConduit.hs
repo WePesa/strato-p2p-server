@@ -56,27 +56,47 @@ handleMsgConduit = awaitForever $ \m -> do
    
    case m of
        Hello{} -> do
-             h <- lift $ getBestBlockHash
+         cxt <- lift $ get
+         liftIO $ putStrLn $ "replying to hello"
+         sendMsgConduit Hello {
+                             version = 4,
+                             clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
+                             capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
+                             port = 30303,
+                             nodeId = peerId cxt
+                           }
+       Ping -> do
+         _ <- lift $ lift $  addPingCountLite
+         liftIO $ putStrLn $ "replying to ping"
+         sendMsgConduit Pong
+       GetPeers -> do
+         liftIO $ putStrLn $ "peer asked for peers"
+         sendMsgConduit $ Peers []
+         sendMsgConduit GetPeers      
+       BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
+       GetBlockHashes h maxBlocks -> do
+         liftIO $ putStrLn $ "peer requested: " ++ (show maxBlocks) ++  " block hashes, starting with: " ++ (show h)
+         hashes <- lift $ getBlockHashes h maxBlocks
+         sendMsgConduit $ BlockHashes hashes 
+       GetBlocks shaList -> do
+         liftIO $ putStrLn $ "peer requested blocks"
+         blks <- lift $ handleBlockRequest shaList
+         sendMsgConduit $ Blocks blks
+       Blocks blocks -> liftIO $ putStrLn "got new blocks"
+       NewBlockPacket block baseDifficulty -> liftIO $ putStrLn "got a new block packet"
+       Status{latestHash=lh, genesisHash=gh} -> do
+             (h,d)<- lift $ getBestBlockHash
+             liftIO $ putStrLn $ "replying to status, best blockHash: " ++ (show h)
              sendMsgConduit Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID="",
-                              totalDifficulty=0,
+                              totalDifficulty= fromIntegral $ d,
                               latestHash=h,
                               genesisHash=(SHA 0xfd4af92a79c7fc2fd8bf0d342f2e832e1d4f485c85b9152d2039e03bc604fdca)   
                             }
-       Ping -> do
-         _ <- lift $ lift $  addPingCountLite
-         sendMsgConduit Pong
-       GetPeers -> do 
-         sendMsgConduit $ Peers []
-         sendMsgConduit GetPeers      
-       BlockHashes blockHashes -> undefined
-       GetBlocks blocks -> do
-         sendMsgConduit $ Blocks []
-       Blocks blocks -> undefined
-       NewBlockPacket block baseDifficulty -> undefined
-       Status{latestHash=lh, genesisHash=gh} -> undefined
-       GetTransactions -> undefined
+       Transactions lst ->
+         sendMsgConduit (Transactions [])
+       GetTransactions -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"     
 
 
@@ -144,6 +164,7 @@ recvMsgConduit = do
       packetData = rlpDeserialize $ B.drop 1 frameData
 
   yield  $ obj2WireMessage packetType packetData
+  recvMsgConduit
       
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 
