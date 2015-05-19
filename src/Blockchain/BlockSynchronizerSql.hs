@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Blockchain.BlockSynchronizerSql (
    getBestBlockHash,
@@ -44,6 +45,8 @@ import Blockchain.ContextLite
 import Data.Conduit.Serialization.Binary
 import Data.Bits
 
+import qualified Data.Text as T
+import qualified Database.Persist.Sql as SQL
 import qualified Database.Esqueleto as E
 
 ethVersion :: Int
@@ -79,14 +82,17 @@ getBestBlock = do
 getBlockHashes :: [SHA] -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
 getBlockHashes shas numBlocks = do
   cxt <- lift $ lift $ get
+   
   firstBdRef <- E.runSqlPool (find $ head shas) $ sqlDBLite cxt
 
   let firstNumber = blockDataRefNumber $ (E.entityVal . head) $ firstBdRef
       total = min maxBlockHashes (fromIntegral numBlocks)
       
-  blkShas <- fmap (map (blockDataRefHash . E.entityVal) ) $ E.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ sqlDBLite cxt
+  (blks :: [ SQL.Single SHA ] ) <- SQL.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ sqlDBLite cxt
 
-  liftIO $ putStrLn $ "got back: " ++ (show $ length blkShas) ++ " blocks with eventual child " ++ (show firstNumber)
+  let blkShas = map SQL.unSingle blks
+        
+  liftIO $ putStrLn $ "got back: " ++ (show $ length blkShas) ++ " blockHashes with eventual child " ++ (show firstNumber)
   return $ blkShas
   
   where find h =   E.select $
@@ -95,17 +101,19 @@ getBlockHashes shas numBlocks = do
                        E.limit $ 1 
                        E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
                        return bdRef
-                       
-        actions upperLimit lowerLimit =
-                   E.select $
-                       E.from $ \(bdr `E.InnerJoin` blk) -> do
-                       E.on ( ( bdr E.^. BlockDataRefBlockId E.==. blk E.^. BlockId) )
-                       E.orderBy [E.desc (bdr E.^. BlockDataRefNumber)]
-                       E.where_ $ ( (bdr E.^. BlockDataRefNumber E.>=. E.val (fromIntegral $ lowerLimit) )
-                                   E.&&. (bdr E.^. BlockDataRefNumber E.<. E.val (fromIntegral $ upperLimit )))
-                       
-                       E.limit $ fromIntegral $ (upperLimit - lowerLimit+1)
-                       return bdr
+
+
+        actions upperLimit lowerLimit  =
+                   SQL.rawSql 
+		       (
+                        T.pack $ 
+                        "SELECT hash FROM block_data_ref WHERE number >= "
+                        ++ show lowerLimit
+                        ++ " AND number < "
+                        ++ show upperLimit ++ " ORDER BY number DESC"
+                        ++ " LIMIT " ++ show maxBlockHashes
+                       )
+                       [ ]                       
 
 maxBlockHashes :: Int
 maxBlockHashes = 512
@@ -113,25 +121,20 @@ maxBlockHashes = 512
 maxBlocks :: Int
 maxBlocks = 512
 
-{-
- Cheats and assumes the SHA list is contiguous.
- We'll see how this goes vis-a-vis our peer rating. This strategy is likely to dramatically speed up the queries
- compared to making separate SQL requests for each SHA.
--}
+shaList2Filter :: (E.Esqueleto query expr backend) =>(expr (E.Entity BlockDataRef), expr (E.Entity Block))-> [SHA] -> expr (E.Value Bool)
+shaList2Filter (bdRef, blk) shaList = (foldl1 (E.||.) (map (\sha -> bdRef E.^. BlockDataRefHash E.==. E.val sha) shaList))
+
 handleBlockRequest :: [SHA] -> (EthCryptMLite ContextMLite) [Block]
 handleBlockRequest shaList = do
   let len = length shaList
-      first = head shaList
-      
+
   cxt <- lift $ lift $ get
-  firstBdRef <- E.runSqlPool (find first) $ sqlDBLite cxt
 
-  let firstNumber = blockDataRefNumber $ (E.entityVal . head) $ firstBdRef
-      total = min maxBlocks len
+  let total = min maxBlocks len
       
-  blks <- E.runSqlPool (actions firstNumber (firstNumber+ (fromIntegral $ total-1))) $ sqlDBLite cxt
+  blks <- E.runSqlPool (actions shaList total) $ sqlDBLite cxt
 
-  liftIO $ putStrLn $ "serving: " ++ (show total) ++ " blocks, starting with number " ++ (show firstNumber)
+  liftIO $ putStrLn $ "serving: " ++ (show total) ++ " blocks "
   return $ (map E.entityVal (blks :: [E.Entity Block])) 
   
   where find h =   E.select $
@@ -141,14 +144,13 @@ handleBlockRequest shaList = do
                        E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
                        return bdRef
                        
-        actions fn ln =
+        actions shas lim  =
                    E.select $
                        E.from $ \(bdr `E.InnerJoin` blk) -> do
                        E.on ( ( bdr E.^. BlockDataRefBlockId E.==. blk E.^. BlockId) )
-                       E.limit $ fromIntegral $ (ln-fn)
-                       E.where_ $ ( (bdr E.^. BlockDataRefNumber E.>=. E.val (fromIntegral $ fn) )
-                                   E.&&. (bdr E.^. BlockDataRefNumber E.<=. E.val (fromIntegral $ ln )))
-                       E.orderBy [E.desc (bdr E.^. BlockDataRefNumber)]
+                       E.limit $ fromIntegral $ lim
+                       E.where_ $ ( shaList2Filter (bdr, blk) shas)
+                       E.orderBy [E.asc (bdr E.^. BlockDataRefNumber)]
                        return blk
 
 

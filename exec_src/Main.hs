@@ -131,7 +131,7 @@ udpHandshakeServer prv cxt conn = do
        SHA messageHash = hash $ BS.pack $ [theType] ++ BS.unpack (rlpSerialize rlp)
        otherPubkey = getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
-
+{-
    putStrLn $ "r:       " ++ (show r)
    putStrLn $ "r:       " ++ (show $ B16.encode $ BS.take 32 $ BS.drop 32 $ msg)
    putStrLn $ "r:       " ++ (show $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msg)                              
@@ -140,6 +140,7 @@ udpHandshakeServer prv cxt conn = do
    putStrLn $ "s:       " ++ (show $ BS.unpack $ BS.take 32 $ BS.drop 64 $ msg)
    putStrLn $ "v:       " ++ (show v)
    putStrLn $ "v:       " ++ (show $ B16.encode $ BS.take 1 $ BS.drop 96 $ msg)
+-}
 --   putStrLn $ "theHash: " ++ (show $ theHash)
 --   putStrLn $ "theHash: " ++ (show $ B16.encode $ BS.take 32 $ msg)
 
@@ -156,16 +157,13 @@ udpHandshakeServer prv cxt conn = do
      
    time <-  round `fmap` getPOSIXTime
 
-   putStrLn $ " do we get past measuring the time?" 
    let (theType, theRLP) = ndPacketToRLP $
                                 (Pong (Endpoint "127.0.0.1" 30303 30303) 4 (time+50):: NodeDiscoveryPacket)
                                 
        theData = BS.unpack $ rlpSerialize theRLP
        SHA theMsgHash = hash $ BS.pack $ (theType:theData)
 
-   putStrLn $ "about to sign"
    ExtendedSignature signature yIsOdd <- liftIO $ H.withSource H.devURandom $ encrypt prv theMsgHash
-   putStrLn $ "are we able to make the sig?" 
 
    let v = if yIsOdd then 1 else 0 
        r = H.sigR signature
@@ -173,28 +171,21 @@ udpHandshakeServer prv cxt conn = do
        theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
        theHash = BS.unpack $ SHA3.hash 256 $ BS.pack $ theSignature ++ [theType] ++ theData
 
---   sockAddr <- S.getPeerName $ conn 
 
-   putStrLn $ "about to read transactional variable"
+  
    
    cxt' <- readTVarIO cxt
    let prevPeers = peers cxt'
        
-   putStrLn $ "does execution ever reach this point, after read before write.... in udpHandshakeServer"
+  
    atomically $ writeTVar cxt (cxt'{peers=(Map.insert ip (hPubKeyToPubKey otherPubkey) prevPeers)} )
-
-
---   cxt'' <- readTVarIO cxt
-
---   putStrLn $ "does execution ever reach this point, after write.... in udpHandshakeServer"
-   
 
    putStrLn $ "about to send PONG"
    _ <- NB.sendTo conn ( BS.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
    
    udpHandshakeServer prv cxt conn
    return () 
-  -- unless (null msg) $ S.sendTo conn msg d >> handler conn
+
 
 encrypt::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
 encrypt prvKey' theHash = do
@@ -238,8 +229,8 @@ tcpHandshakeServer prv otherPoint = go
     let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
         eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
 
-    lift $ putStrLn $ "length of decrypted message: " ++ (show $ BS.length eceisMsgIBytes)
-    lift $ putStrLn $ "decrypted message: " ++ (show $ BS.unpack eceisMsgIBytes)
+--    lift $ putStrLn $ "length of decrypted message: " ++ (show $ BS.length eceisMsgIBytes)
+--    lift $ putStrLn $ "decrypted message: " ++ (show $ BS.unpack eceisMsgIBytes)
     
 --    let otherEphemeralBytes = BS.unpack $ BS.take 64 $ BS.drop 1 hsBytesStr
   --      otherEphemeral = bytesToPoint otherEphemeralBytes
@@ -271,7 +262,6 @@ tcpHandshakeServer prv otherPoint = go
 
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
 
-
               -- let otherPubkey = getPubKeyFromSignature extSig (bytesToWord256 theHash)  
         otherEphemeral = hPubKeyToPubKey $ getPubKeyFromSignature extSig msg
    --     let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msgBytes
@@ -291,8 +281,8 @@ tcpHandshakeServer prv otherPoint = go
         
     let myNonce = 25 :: Word256
 
-    lift $ putStrLn $ "my ephemeral: " ++ (show $ B16.encode $ BS.pack $ pointToBytes myEphemeral)
-    lift $ putStrLn $ "my ephemeral as a point: " ++ (show $ myEphemeral)
+--    lift $ putStrLn $ "my ephemeral: " ++ (show $ B16.encode $ BS.pack $ pointToBytes myEphemeral)
+--    lift $ putStrLn $ "my ephemeral as a point: " ++ (show $ myEphemeral)
 --    let otherNonce = (BL.toStrict $ BN.encode sharedKey) `bXor` (BS.take 32 $ BS.drop 64 msgBytes)
             
  --   lift $ putStrLn $ "otherNonce: " ++ (show $ otherNonce)
@@ -309,13 +299,13 @@ tcpHandshakeServer prv otherPoint = go
 
     let SharedKey sharedKey2 = getShared theCurve myPriv otherPoint
     
-    lift $ putStrLn $ "shared key 2: " ++ (show $ intToBytes sharedKey2)
+  --  lift $ putStrLn $ "shared key 2: " ++ (show $ intToBytes sharedKey2)
 
     let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
         ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
-    lift $ putStrLn $ "otherEphemeral as a point: " ++ (show $ otherEphemeral)
-    lift $ putStrLn $ "otherEphemeral bytes      : " ++ (show $ pointToBytes otherEphemeral)
-    lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
+  --  lift $ putStrLn $ "otherEphemeral as a point: " ++ (show $ otherEphemeral)
+  --  lift $ putStrLn $ "otherEphemeral bytes      : " ++ (show $ pointToBytes otherEphemeral)
+  --  lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
 
     let myNonceBS = BS.pack $ word256ToBytes myNonce
         shared2' = BS.pack $ intToBytes sharedKey2
@@ -332,14 +322,9 @@ tcpHandshakeServer prv otherPoint = go
  --  lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show $ BS.unpack $ (otherNonce `add` myNonceBS))
  --   lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ BS.unpack $ (otherNonce `add` myNonceBS) `add` shared2' )
     
- --  lift $  putStrLn $ "length: otherNonce " ++ (show . BS.length $ otherNonce)
-    lift $  putStrLn $ "frameDecKey: " ++ (show $ BS.unpack $ frameDecKey)
-    lift $  putStrLn $ "macEncKey: " ++ (show $ BS.unpack $ macEncKey)
 
- 
---    let ingressCipher = eceisCipher eceisMsgIncoming
-  --      egressCipher = eceisCipher eceisMsgOutgoing 
-
+--    lift $  putStrLn $ "frameDecKey: " ++ (show $ BS.unpack $ frameDecKey)
+--    lift $  putStrLn $ "macEncKey: " ++ (show $ BS.unpack $ macEncKey)
 
     let cState =
           EthCryptStateLite {
@@ -353,21 +338,8 @@ tcpHandshakeServer prv otherPoint = go
             ingressKey=macEncKey,
             peerId = calculatePublic theCurve prv
           }
-{-
-    lift $ putStrLn $ "egressCipher: " ++ (show egressCipher)
-    lift $ putStrLn $ "length egressCipher: " ++ (show $ BS.length egressCipher)
-    
-    lift $ putStrLn $ "ingressCipher: " ++ (show ingressCipher)
-    lift $ putStrLn $ "length ingressCipher: " ++ (show $ BS.length ingressCipher)
--}
---    lift $ putStrLn $ "state: " ++ (show cState)
-    return cState
-   --    nextMsgL <- CBN.take 176
---    let nextMsg = BL.toStrict nextMsgL
-        
---    lift $ putStrLn $ "probably the Hello Message, encrypted: " ++ (show nextMsg)
 
---    lift $ putStrLn $ "unRLPed:   " ++ (show $ obj2WireMessage packetType packetData)
+    return cState
 
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
@@ -381,14 +353,28 @@ pointToBytes::Point->[Word8]
 pointToBytes (Point x y) = intToBytes x ++ intToBytes y
 pointToBytes PointO = error "pointToBytes got value PointO, I don't know what to do here"
 
+createTrigger :: PS.Connection -> IO ()
+createTrigger conn = do
+     res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
+\CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
+    \ BEGIN \n\
+    \     NOTIFY new_transaction; \n\
+    \     RETURN NULL; \n\
+    \ END; \n\
+\ $tx_notify$ LANGUAGE plpgsql; \n\
+\ CREATE TRIGGER tx_notify AFTER INSERT OR UPDATE OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
+
+     putStrLn $ "created trigger with result: " ++ (show res2)
+
 listenForNotification :: PS.Connection -> IO ()
 listenForNotification conn = do
   res <- PS.execute_ conn "LISTEN new_transaction;"
   putStrLn ("should be listening, with result: " ++ show res)
   notif <- getNotification conn
+  putStrLn $ "got notification on channel new_transaction"
   putStrLn . show . notificationChannel $ notif
   putStrLn . show . notificationPid $ notif
-                 
+  listenForNotification conn               
 
 main :: IO ()
 main = do
@@ -402,9 +388,10 @@ main = do
   putStrLn $ "as a point:   " ++ (show myPublic)
   
   cxt <- initContextLite
-
-  -- set up listener         
   tCxt <- newTVarIO cxt
+
+  createTrigger (notifHandler cxt)
+  async $ (listenForNotification (notifHandler cxt))  
   
   async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
@@ -414,13 +401,12 @@ main = do
            flip runStateT cxt $
                   
                   lift $ lift $ lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
-      --              putStrLn $ "connection: appSockAddr: " ++ (show (appSockAddr app))
-        --            putStrLn $ "connection: appLocalAddr: " ++ (show (appLocalAddr app))
-
+                    putStrLn $ "connection: appSockAddr: " ++ (show (appSockAddr app))
+      
                     curr <- readTVarIO tCxt
-            --        putStrLn $ "current context: " ++ (show curr)
+                    putStrLn $ "current context: " ++ (show curr)
 
-                    async $ (listenForNotification (notifHandler cxt))  
+  
                     (initCond,cState) <-
                       appSource app $$+ (tcpHandshakeServer myPriv ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
                     (unwrap, _) <- unwrapResumable initCond
@@ -440,16 +426,6 @@ main = do
 
                      
     return ()
-
-  {-
-  runResourceT $ do
-        appState <- initState
-        lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
-            cond <-
-                appSource app $$ (tcpHandshakeServer myPriv) `fuseUpstream` appSink app
-            (runClient fromClient appState client)
-                `finally` (removeClient appState client)
-        return ()
--}
+ 
     
   

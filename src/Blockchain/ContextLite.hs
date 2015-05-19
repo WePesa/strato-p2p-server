@@ -72,7 +72,11 @@ data ContextLite =
     peers:: Map.Map String Point,
     debugEnabled::Bool,
     notifHandler::PS.Connection
-  } 
+  } deriving Show
+
+
+instance Show PS.Connection where
+  show conn = "Postgres Simple Connection"
 
 type TContext = TVar ContextLite
 type ContextMLite = StateT ContextLite DBMLite
