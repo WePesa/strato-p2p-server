@@ -5,6 +5,8 @@ module Blockchain.CommunicationConduit (
   handleMsgConduit,
   sendMsgConduit,
   recvMsgConduit,
+  MessageOrNotification(..),
+  RowNotification(..),
   bXor
   ) where
 
@@ -49,14 +51,15 @@ import qualified Database.Esqueleto as E
 
 ethVersion :: Int
 ethVersion = 60
- 
-handleMsgConduit :: Conduit Message (EthCryptMLite ContextMLite) B.ByteString
-handleMsgConduit = awaitForever $ \m -> do
-   liftIO $ putStrLn $ "received message: " ++ (show m)
-   
+
+data RowNotification = TransactionNotification Int | BlockNotification Int
+data MessageOrNotification = EthMessage Message | Notif RowNotification
+
+respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+respondMsgConduit m = do
    case m of
        Hello{} -> do
-         cxt <- lift $ get
+         cxt <- lift $ lift $ get
          liftIO $ putStrLn $ "replying to hello"
          sendMsgConduit Hello {
                              version = 4,
@@ -66,7 +69,7 @@ handleMsgConduit = awaitForever $ \m -> do
                              nodeId = peerId cxt
                            }
        Ping -> do
-         _ <- lift $ lift $  addPingCountLite
+         _ <- lift $ lift $ lift $   addPingCountLite
          liftIO $ putStrLn $ "replying to ping"
          sendMsgConduit Pong
        GetPeers -> do
@@ -76,16 +79,16 @@ handleMsgConduit = awaitForever $ \m -> do
        BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
        GetBlockHashes h maxBlocks -> do
          liftIO $ putStrLn $ "peer requested: " ++ (show maxBlocks) ++  " block hashes, starting with: " ++ (show h)
-         hashes <- lift $ getBlockHashes h maxBlocks
+         hashes <- lift $ lift $ getBlockHashes h maxBlocks
          sendMsgConduit $ BlockHashes hashes 
        GetBlocks shaList -> do
          liftIO $ putStrLn $ "peer requested blocks"
-         blks <- lift $ handleBlockRequest shaList
+         blks <- lift $ lift $ handleBlockRequest shaList
          sendMsgConduit $ Blocks blks
        Blocks blocks -> liftIO $ putStrLn "got new blocks"
        NewBlockPacket block baseDifficulty -> liftIO $ putStrLn "got a new block packet"
        Status{latestHash=lh, genesisHash=gh} -> do
-             (h,d)<- lift $ getBestBlockHash
+             (h,d)<- lift $ lift $ getBestBlockHash
              liftIO $ putStrLn $ "replying to status, best blockHash: " ++ (show h)
              sendMsgConduit Status{
                               protocolVersion=fromIntegral ethVersion,
@@ -97,10 +100,15 @@ handleMsgConduit = awaitForever $ \m -> do
        Transactions lst ->
          sendMsgConduit (Transactions [])
        GetTransactions -> liftIO $ putStrLn "peer asked for transaction"
-       _ -> liftIO $ putStrLn $ "unrecognized message"     
+       _ -> liftIO $ putStrLn $ "unrecognized message"
+       
+handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+handleMsgConduit = awaitForever $ \mn -> do
+  case mn of
+    (EthMessage m) -> respondMsgConduit m
+    (Notif (TransactionNotification n)) -> liftIO $ putStrLn "got new transaction, maybe should feed it upstream"
 
-
-sendMsgConduit :: MonadIO m => Message -> Producer (EthCryptMLite m) B.ByteString
+sendMsgConduit :: MonadIO m => Message -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
 sendMsgConduit msg = do
  
   let (pType, pData) = wireMessage2Obj msg
@@ -115,32 +123,32 @@ sendMsgConduit msg = do
                                                         0x80,
                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-  headCipher <- lift $ encrypt header
-  headMAC <- lift $ updateEgressMac headCipher
-  frameCipher <- lift $ encrypt (bytes `B.append` B.replicate frameBuffSize 0)
-  frameMAC <- lift $ updateEgressMac =<< rawUpdateEgressMac frameCipher
+  headCipher <- lift $ lift $ encrypt header
+  headMAC <- lift $ lift $ updateEgressMac headCipher
+  frameCipher <- lift $ lift $ encrypt (bytes `B.append` B.replicate frameBuffSize 0)
+  frameMAC <- lift $ lift $ updateEgressMac =<< rawUpdateEgressMac frameCipher
 
 
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
   
 
-recvMsgConduit :: MonadIO m => Conduit B.ByteString (EthCryptMLite m) Message
+recvMsgConduit :: MonadIO m => Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
 recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
 
-  liftIO $ putStrLn $ "headCipher: " ++ (show $ B.unpack $ BL.toStrict headCipher)
-  liftIO $ putStrLn $ "headMAC:    " ++ (show $ B.unpack $ BL.toStrict headMAC)
+--  liftIO $ putStrLn $ "headCipher: " ++ (show $ B.unpack $ BL.toStrict headCipher)
+--  liftIO $ putStrLn $ "headMAC:    " ++ (show $ B.unpack $ BL.toStrict headMAC)
   
-  expectedHeadMAC <- lift $ updateIngressMac $ (BL.toStrict headCipher)
+  expectedHeadMAC <- lift $ lift $ updateIngressMac $ (BL.toStrict headCipher)
 
-  liftIO $ putStrLn $ "expected: " ++ (show $ B.unpack expectedHeadMAC)
+--  liftIO $ putStrLn $ "expected: " ++ (show $ B.unpack expectedHeadMAC)
   
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error "oops, head mac isn't what I expected"
 
-  header <- lift $ decrypt (BL.toStrict headCipher)
+  header <- lift $ lift $ decrypt (BL.toStrict headCipher)
 
-  liftIO $ putStrLn $ "header: " ++ (show $ B.unpack header)
+--  liftIO $ putStrLn $ "header: " ++ (show $ B.unpack header)
   
   let frameSize = 
         (fromIntegral (header `B.index` 0) `shiftL` 16) +
@@ -152,18 +160,19 @@ recvMsgConduit = do
   frameMAC <- CBN.take 16
 
 
-  expectedFrameMAC <- lift $ updateIngressMac =<< rawUpdateIngressMac (BL.toStrict frameCipher)
+  expectedFrameMAC <- lift $ lift $ updateIngressMac =<< rawUpdateIngressMac (BL.toStrict frameCipher)
 
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
-  fullFrame <- lift $ decrypt (BL.toStrict frameCipher)
+  fullFrame <- lift $ lift $ decrypt (BL.toStrict frameCipher)
 
-  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
+--  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
       packetData = rlpDeserialize $ B.drop 1 frameData
 
-  yield  $ obj2WireMessage packetType packetData
+  yield . EthMessage  $ obj2WireMessage packetType packetData
+--   yield   $ obj2WireMessage packetType packetData
   recvMsgConduit
       
 bXor::B.ByteString->B.ByteString->B.ByteString

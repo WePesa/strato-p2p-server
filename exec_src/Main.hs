@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE LiberalTypeSynonyms        #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 import           Conduit
 import           Data.Conduit
@@ -92,7 +93,9 @@ import           Crypto.Cipher.AES
 
 import           Data.Bits
 import qualified Database.PostgreSQL.Simple as PS
-import Database.PostgreSQL.Simple.Notification
+import           Database.PostgreSQL.Simple.Notification
+import qualified Data.ByteString.Char8 as BC
+import           Data.List.Split
 
 portS = "30303"
 
@@ -349,16 +352,12 @@ sockAddrToIP (S.SockAddrInet6 port _ host _) = show host
 sockAddrToIP (S.SockAddrUnix str) = str
 sockAddrToIP addr = takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
-pointToBytes::Point->[Word8]
-pointToBytes (Point x y) = intToBytes x ++ intToBytes y
-pointToBytes PointO = error "pointToBytes got value PointO, I don't know what to do here"
-
 createTrigger :: PS.Connection -> IO ()
 createTrigger conn = do
      res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\
-    \     NOTIFY new_transaction; \n\
+    \     PERFORM pg_notify('new_transaction', TG_TABLE_NAME || ',id,' || NEW.id ); \n\
     \     RETURN NULL; \n\
     \ END; \n\
 \ $tx_notify$ LANGUAGE plpgsql; \n\
@@ -366,6 +365,24 @@ createTrigger conn = do
 
      putStrLn $ "created trigger with result: " ++ (show res2)
 
+
+parseNotifPayload :: String -> Int
+parseNotifPayload s = read $ last $ splitOn "," s :: Int
+
+listenConduit :: PS.Connection -> Producer IO MessageOrNotification
+listenConduit conn = do
+    res <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
+    liftIO $ putStrLn ("should be listening, with result: " ++ show res)
+    notif <- liftIO $ getNotification conn
+    liftIO $ putStrLn $ "got notification on channel new_transaction"
+    liftIO $ putStrLn . show . notificationChannel $ notif
+    liftIO $ putStrLn . show . notificationPid $ notif
+    liftIO $ putStrLn . show . notificationData $ notif
+
+    yield . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
+    listenConduit conn
+
+{-                             
 listenForNotification :: PS.Connection -> IO ()
 listenForNotification conn = do
   res <- PS.execute_ conn "LISTEN new_transaction;"
@@ -375,6 +392,7 @@ listenForNotification conn = do
   putStrLn . show . notificationChannel $ notif
   putStrLn . show . notificationPid $ notif
   listenForNotification conn               
+-}
 
 main :: IO ()
 main = do
@@ -391,7 +409,7 @@ main = do
   tCxt <- newTVarIO cxt
 
   createTrigger (notifHandler cxt)
-  async $ (listenForNotification (notifHandler cxt))  
+--  async $ (listenForNotification (notifHandler cxt))  
   
   async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
@@ -412,13 +430,23 @@ main = do
                     (unwrap, _) <- unwrapResumable initCond
 
                     putStrLn $ "connection established, now handling messages"
-                    
+
+
                     runResourceT $ do
                        _ <- flip runStateT db $
                          flip runStateT cxt $
-                           flip runStateT cState $ 
-                            (transPipe (lift . lift . lift . lift) unwrap) $$
-                              recvMsgConduit =$= handleMsgConduit  `fuseUpstream` appSink app
+                           flip runStateT cState $
+                             runResourceT $ do
+
+                               (feedHandler :: Conduit BS.ByteString (EthCryptMLite ContextMLite)  MessageOrNotification )  <- mergeConduits [ transPipe (lift . lift . lift . lift . lift)
+                                                                                                                                                 (listenConduit (notifHandler cxt)),
+                                                                                                                                               recvMsgConduit ]
+                                                                                                                                              16
+--                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
+--                                   (transPipe lift feedHandler) =$= handleMsgConduit  `fuseUpstream` appSink app
+
+                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
+                                   recvMsgConduit =$= handleMsgConduit  `fuseUpstream` appSink app
                    
                        return ()
 

@@ -57,7 +57,7 @@ getBestBlockHash = do
   cxt <- lift $ lift $ get
   blks <-  E.runSqlPool actions $ sqlDBLite cxt
 
-  return $ head $ map (\t -> (blockDataRefHash t, blockDataRefDifficulty t))(map E.entityVal (blks :: [E.Entity BlockDataRef])) 
+  return $ head $ map (\t -> (blockDataRefHash t, blockDataRefTotalDifficulty t))(map E.entityVal (blks :: [E.Entity BlockDataRef])) 
   
   where actions =   E.select $
                        E.from $ \(bdRef) -> do
@@ -116,7 +116,7 @@ getBlockHashes shas numBlocks = do
                        [ ]                       
 
 maxBlockHashes :: Int
-maxBlockHashes = 512
+maxBlockHashes = 2048
 
 maxBlocks :: Int
 maxBlocks = 512
