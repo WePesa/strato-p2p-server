@@ -30,6 +30,7 @@ import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Data.Word8               (_cr)
 import           Control.Monad
+import           Control.Concurrent       (forkIO)
 import           Control.Concurrent.Async 
 import           Control.Exception
 import           Blockchain.Data.DataDefs 
@@ -96,6 +97,8 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Data.List.Split
+import           Control.Applicative
+import           Control.Concurrent.STM.TBMChan
 
 portS = "30303"
 
@@ -124,7 +127,7 @@ udpHandshakeServer prv cxt conn = do
    let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msg
        s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msg
        v = head . BS.unpack $ BS.take 1 $ BS.drop 96 msg
-       -- theHash = BS.unpack $ BS.take 32 msg
+
        theType = head . BS.unpack $ BS.take 1$ BS.drop 97 msg
        theRest = BS.unpack $ BS.drop 98 msg
        (rlp, _) = rlpSplit theRest
@@ -144,20 +147,10 @@ udpHandshakeServer prv cxt conn = do
    putStrLn $ "v:       " ++ (show v)
    putStrLn $ "v:       " ++ (show $ B16.encode $ BS.take 1 $ BS.drop 96 $ msg)
 -}
---   putStrLn $ "theHash: " ++ (show $ theHash)
---   putStrLn $ "theHash: " ++ (show $ B16.encode $ BS.take 32 $ msg)
 
---   let extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
-
-
-  -- let otherPubkey = getPubKeyFromSignature extSig (bytesToWord256 theHash)
    putStrLn $ "other pubkey: " ++ (show $ B16.encode $ BS.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
    putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
    
-   --  putStrLn $ show $ hPubKeyToPubKey $ derivePubKey $ ethHPrvKey
-
---   runStateT $
-     
    time <-  round `fmap` getPOSIXTime
 
    let (theType, theRLP) = ndPacketToRLP $
@@ -166,7 +159,7 @@ udpHandshakeServer prv cxt conn = do
        theData = BS.unpack $ rlpSerialize theRLP
        SHA theMsgHash = hash $ BS.pack $ (theType:theData)
 
-   ExtendedSignature signature yIsOdd <- liftIO $ H.withSource H.devURandom $ encrypt prv theMsgHash
+   ExtendedSignature signature yIsOdd <- liftIO $ H.withSource H.devURandom $ ecdsaSign  prv theMsgHash
 
    let v = if yIsOdd then 1 else 0 
        r = H.sigR signature
@@ -174,13 +167,9 @@ udpHandshakeServer prv cxt conn = do
        theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
        theHash = BS.unpack $ SHA3.hash 256 $ BS.pack $ theSignature ++ [theType] ++ theData
 
-
-  
-   
    cxt' <- readTVarIO cxt
    let prevPeers = peers cxt'
        
-  
    atomically $ writeTVar cxt (cxt'{peers=(Map.insert ip (hPubKeyToPubKey otherPubkey) prevPeers)} )
 
    putStrLn $ "about to send PONG"
@@ -190,8 +179,8 @@ udpHandshakeServer prv cxt conn = do
    return () 
 
 
-encrypt::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
-encrypt prvKey' theHash = do
+ecdsaSign::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
+ecdsaSign prvKey' theHash = do
     extSignMsg theHash prvKey'
     
 
@@ -265,16 +254,9 @@ tcpHandshakeServer prv otherPoint = go
 
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
 
-              -- let otherPubkey = getPubKeyFromSignature extSig (bytesToWord256 theHash)  
+
         otherEphemeral = hPubKeyToPubKey $ getPubKeyFromSignature extSig msg
-   --     let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msgBytes
-     --   let s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msgBytes
---        lift $ putStrLn $ "last byte of msg: " ++ show (BS.drop 96 msgBytes)
-        
-  --      let v = head . BS.unpack $ BS.take 1 $ BS.drop 96 msgBytes
-  --      let theHash = BS.unpack $ BS.take 32 msgBytes
-         
- --       let yIsOdd = v == 1
+
 
     entropyPool <- liftIO createEntropyPool
     let g = cprgCreate entropyPool :: SystemRNG
@@ -369,8 +351,10 @@ createTrigger conn = do
 parseNotifPayload :: String -> Int
 parseNotifPayload s = read $ last $ splitOn "," s :: Int
 
-listenConduit :: PS.Connection -> Producer IO MessageOrNotification
-listenConduit conn = do
+bufSize = 16
+
+listenThread :: PS.Connection -> IO MessageOrNotification
+listenThread conn = do
     res <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     liftIO $ putStrLn ("should be listening, with result: " ++ show res)
     notif <- liftIO $ getNotification conn
@@ -378,21 +362,22 @@ listenConduit conn = do
     liftIO $ putStrLn . show . notificationChannel $ notif
     liftIO $ putStrLn . show . notificationPid $ notif
     liftIO $ putStrLn . show . notificationData $ notif
+    return . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
+    
+listenChan :: PS.Connection -> IO (TBMChan MessageOrNotification)
+listenChan conn = do
+    chan <- atomically $ newTBMChan bufSize
+    forkListener chan conn
+    putStrLn $ "in listenChan, after forkListener"
+    return chan
 
-    yield . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
-    listenConduit conn
-
-{-                             
-listenForNotification :: PS.Connection -> IO ()
-listenForNotification conn = do
-  res <- PS.execute_ conn "LISTEN new_transaction;"
-  putStrLn ("should be listening, with result: " ++ show res)
-  notif <- getNotification conn
-  putStrLn $ "got notification on channel new_transaction"
-  putStrLn . show . notificationChannel $ notif
-  putStrLn . show . notificationPid $ notif
-  listenForNotification conn               
--}
+  where
+    forkListener chan conn = void . forkIO $ do
+      putStrLn $ "in forkListener, about to listen"
+      next <- listenThread conn
+      putStrLn $ "in forkListener, after listen - writing atomically"
+      atomically $ writeTBMChan chan next
+      forkListener chan conn	
 
 main :: IO ()
 main = do
@@ -409,7 +394,6 @@ main = do
   tCxt <- newTVarIO cxt
 
   createTrigger (notifHandler cxt)
---  async $ (listenForNotification (notifHandler cxt))  
   
   async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
@@ -424,29 +408,33 @@ main = do
                     curr <- readTVarIO tCxt
                     putStrLn $ "current context: " ++ (show curr)
 
-  
+                     
                     (initCond,cState) <-
                       appSource app $$+ (tcpHandshakeServer myPriv ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
                     (unwrap, _) <- unwrapResumable initCond
 
                     putStrLn $ "connection established, now handling messages"
 
-
+                    chan <- listenChan (notifHandler cxt)
+                    
                     runResourceT $ do
                        _ <- flip runStateT db $
                          flip runStateT cxt $
                            flip runStateT cState $
                              runResourceT $ do
 
-                               (feedHandler :: Conduit BS.ByteString (EthCryptMLite ContextMLite)  MessageOrNotification )  <- mergeConduits [ transPipe (lift . lift . lift . lift . lift)
-                                                                                                                                                 (listenConduit (notifHandler cxt)),
-                                                                                                                                               recvMsgConduit ]
-                                                                                                                                              16
+{-                               
+                               (feedHandler :: Conduit BS.ByteString (EthCryptMLite ContextMLite) MessageOrNotification)
+                                                <- mergeConduits [ (transPipe (lift . lift . lift . lift . lift)
+                                                                   (listenConduit (notifHandler cxt))) :: Producer (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification,
+                                                                   recvMsgConduit ]
+                                                                                  16
+-}
 --                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
 --                                   (transPipe lift feedHandler) =$= handleMsgConduit  `fuseUpstream` appSink app
 
                                (transPipe (lift . lift . lift . lift . lift) unwrap) $$
-                                   recvMsgConduit =$= handleMsgConduit  `fuseUpstream` appSink app
+                                   (recvMsgConduit chan) =$= handleMsgConduit  `fuseUpstream` appSink app
                    
                        return ()
 

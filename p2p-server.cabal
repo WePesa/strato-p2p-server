@@ -59,7 +59,8 @@ executable p2p-server
                        vector,
                        IfElse,
                        postgresql-simple,
-                       split
+                       split,
+                       stm-chans
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
   default-language: Haskell2010      
@@ -107,7 +108,9 @@ library
                        vector,
                        IfElse,
                        postgresql-simple,
-                       split
+                       split,
+                       stm-chans
+
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,

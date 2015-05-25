@@ -5,6 +5,10 @@ module Blockchain.CommunicationConduit (
   handleMsgConduit,
   sendMsgConduit,
   recvMsgConduit,
+  encrypt,
+  decrypt,
+  updateIngressMac,
+  rawUpdateIngressMac,
   MessageOrNotification(..),
   RowNotification(..),
   bXor
@@ -38,10 +42,14 @@ import Blockchain.DBM
 import Blockchain.RLPx
 import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
+import Blockchain.Data.Transaction
+import Blockchain.Data.BlockDB
 
 import Conduit
 import Data.Conduit
 import qualified Data.Conduit.Binary as CBN
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TBMChan
 
 import Data.Conduit.Serialization.Binary
 import Data.Bits
@@ -57,6 +65,7 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
+   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m)
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
@@ -106,8 +115,11 @@ handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite Cont
 handleMsgConduit = awaitForever $ \mn -> do
   case mn of
     (EthMessage m) -> respondMsgConduit m
-    (Notif (TransactionNotification n)) -> liftIO $ putStrLn "got new transaction, maybe should feed it upstream"
-
+    (Notif (TransactionNotification n)) -> do -- liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
+         tx <- lift $ lift $ getTransactionFromNotif n
+         sendMsgConduit $ Transactions (map rawTX2TX tx)
+    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
+    
 sendMsgConduit :: MonadIO m => Message -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
 sendMsgConduit msg = do
  
@@ -132,8 +144,8 @@ sendMsgConduit msg = do
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
   
 
-recvMsgConduit :: MonadIO m => Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
-recvMsgConduit = do
+recvMsgConduit :: MonadIO m => (TBMChan MessageOrNotification) -> Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
+recvMsgConduit chan = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
 
@@ -144,7 +156,7 @@ recvMsgConduit = do
 
 --  liftIO $ putStrLn $ "expected: " ++ (show $ B.unpack expectedHeadMAC)
   
-  when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error "oops, head mac isn't what I expected"
+  when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error ("oops, head mac isn't what I expected, headCipher: " ++ (show headCipher))
 
   header <- lift $ lift $ decrypt (BL.toStrict headCipher)
 
@@ -165,15 +177,23 @@ recvMsgConduit = do
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
   fullFrame <- lift $ lift $ decrypt (BL.toStrict frameCipher)
 
---  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
+  -- liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
       packetData = rlpDeserialize $ B.drop 1 frameData
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
---   yield   $ obj2WireMessage packetType packetData
-  recvMsgConduit
+
+  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
+  nextNotif <- liftIO $ atomically  $ tryReadTBMChan chan    -- sort of a polling approach which is unfortunate, but we'll live with it for now
+
+  case nextNotif of
+      (Just Nothing) -> recvMsgConduit chan
+      (Nothing) -> recvMsgConduit chan          -- channel is closed, I think
+      (Just (Just msg)) -> do { yield msg; recvMsgConduit chan }
+      _ -> recvMsgConduit chan
+
       
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 

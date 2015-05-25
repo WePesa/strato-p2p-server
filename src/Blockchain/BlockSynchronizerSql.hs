@@ -6,7 +6,8 @@ module Blockchain.BlockSynchronizerSql (
    getBestBlockHash,
    getBestBlock,
    getBlockHashes,
-   handleBlockRequest
+   handleBlockRequest,
+   getTransactionFromNotif
   ) where
 
 import Control.Monad.Trans.State
@@ -153,7 +154,14 @@ handleBlockRequest shaList = do
                        E.orderBy [E.asc (bdr E.^. BlockDataRefNumber)]
                        return blk
 
+getTransactionFromNotif :: Int -> (EthCryptMLite ContextMLite ) [RawTransaction]
+getTransactionFromNotif row = do
+    cxt <- lift $ lift $ get
+    tx <- SQL.runSqlPool (actions row) $ sqlDBLite cxt
+    return (map SQL.entityVal tx)
 
+    where actions nt = SQL.selectList [ RawTransactionId SQL.==. (SQL.toSqlKey $ fromIntegral $ row ) ]
+                                      [ SQL.LimitTo 1]
 {-
 findFirstHashAlreadyInDB::[SHA]->ContextM (Maybe SHA)
 
