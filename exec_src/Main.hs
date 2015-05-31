@@ -353,8 +353,8 @@ parseNotifPayload s = read $ last $ splitOn "," s :: Int
 
 bufSize = 16
 
-listenThread :: PS.Connection -> IO MessageOrNotification
-listenThread conn = do
+listenConn :: PS.Connection -> IO MessageOrNotification
+listenConn conn = do
     res <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     liftIO $ putStrLn ("should be listening, with result: " ++ show res)
     notif <- liftIO $ getNotification conn
@@ -374,7 +374,7 @@ listenChan conn = do
   where
     forkListener chan conn = void . forkIO $ do
       putStrLn $ "in forkListener, about to listen"
-      next <- listenThread conn
+      next <- listenConn conn
       putStrLn $ "in forkListener, after listen - writing atomically"
       atomically $ writeTBMChan chan next
       forkListener chan conn	
@@ -422,17 +422,6 @@ main = do
                          flip runStateT cxt $
                            flip runStateT cState $
                              runResourceT $ do
-
-{-                               
-                               (feedHandler :: Conduit BS.ByteString (EthCryptMLite ContextMLite) MessageOrNotification)
-                                                <- mergeConduits [ (transPipe (lift . lift . lift . lift . lift)
-                                                                   (listenConduit (notifHandler cxt))) :: Producer (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification,
-                                                                   recvMsgConduit ]
-                                                                                  16
--}
---                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
---                                   (transPipe lift feedHandler) =$= handleMsgConduit  `fuseUpstream` appSink app
-
                                (transPipe (lift . lift . lift . lift . lift) unwrap) $$
                                    (recvMsgConduit chan) =$= handleMsgConduit  `fuseUpstream` appSink app
                    

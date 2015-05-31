@@ -5,10 +5,6 @@ module Blockchain.CommunicationConduit (
   handleMsgConduit,
   sendMsgConduit,
   recvMsgConduit,
-  encrypt,
-  decrypt,
-  updateIngressMac,
-  rawUpdateIngressMac,
   MessageOrNotification(..),
   RowNotification(..),
   bXor
@@ -65,7 +61,7 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
-   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m)
+  -- liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m)
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
@@ -108,7 +104,7 @@ respondMsgConduit m = do
                             }
        Transactions lst ->
          sendMsgConduit (Transactions [])
-       GetTransactions -> liftIO $ putStrLn "peer asked for transaction"
+       GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
        
 handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
@@ -185,7 +181,7 @@ recvMsgConduit chan = do
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
 
-  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
+--  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
   nextNotif <- liftIO $ atomically  $ tryReadTBMChan chan    -- sort of a polling approach which is unfortunate, but we'll live with it for now
 
   case nextNotif of
