@@ -332,8 +332,7 @@ sockAddrToIP :: S.SockAddr -> String
 sockAddrToIP (S.SockAddrInet6 port _ host _) = show host
 -- sockAddrToIP (S.SockAddrInet port host) = show host   -- convert to dot dash
 sockAddrToIP (S.SockAddrUnix str) = str
-sockAddrToIP addr = takeWhile (\t -> t /= ':') (show addr)
-  --takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
+sockAddrToIP addr = takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
 createTrigger :: PS.Connection -> IO ()
 createTrigger conn = do
