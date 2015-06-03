@@ -380,8 +380,8 @@ listenChan conn = do
       atomically $ writeTBMChan chan next
       forkListener chan conn	
 
-privateKey = 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38e
-  
+privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
+
 main :: IO ()
 main = do
   entropyPool <- liftIO createEntropyPool
