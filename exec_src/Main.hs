@@ -195,7 +195,7 @@ theCurve :: Curve
 theCurve = getCurveByName SEC_p256k1
 
 ethHPrvKey ::H.PrvKey
-Just ethHPrvKey = H.makePrvKey 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38d
+Just ethHPrvKey = H.makePrvKey 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38e
 
 add :: BS.ByteString->BS.ByteString->BS.ByteString
 add acc val | BS.length acc ==32 && BS.length val == 32 = SHA3.hash 256 $ val `BS.append` acc
@@ -380,14 +380,21 @@ listenChan conn = do
       atomically $ writeTBMChan chan next
       forkListener chan conn	
 
+privateKey = 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38e
+  
 main :: IO ()
 main = do
   entropyPool <- liftIO createEntropyPool
-
+{-
   let g = cprgCreate entropyPool :: SystemRNG
       (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
+-}
 
-  let myPublic = calculatePublic theCurve myPriv
+  let myPriv = privateKey
+      
+--  let myPublic = calculatePublic theCurve myPriv
+  let myPublic = calculatePublic theCurve (fromIntegral myPriv)
+
   putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ BS.pack $ pointToBytes myPublic)
   putStrLn $ "as a point:   " ++ (show myPublic)
   
@@ -411,7 +418,7 @@ main = do
 
                      
                     (initCond,cState) <-
-                      appSource app $$+ (tcpHandshakeServer myPriv ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
+                      appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
                     (unwrap, _) <- unwrapResumable initCond
 
                     putStrLn $ "connection established, now handling messages"
