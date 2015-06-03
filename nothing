@@ -1,8 +1,0 @@
-HTTP/1.1 405 Method Not Allowed
-Date: Wed, 03 Jun 2015 00:30:31 GMT
-Server: Warp/3.0.11
-Content-Length: 1374
-Content-Type: text/html; charset=utf-8
-Set-Cookie: _SESSION=fL5k1zl62d4oIMj+nAYrgXMtn4fNmykYgNS5WzbrbbYv982Q+eWC2mkvc5HzhoGC6LPjn7bNt52YFuuo/vi1HsWk1uTcKixEQVKEZTuwkgQkPO0IEHucaRtu/cWzFKdcdD9gRdldCx4=; Path=/; Expires=Wed, 03-Jun-2015 02:30:26 GMT; HttpOnly
-Vary: Accept, Accept-Language
-
