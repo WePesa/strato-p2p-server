@@ -61,11 +61,13 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
-  -- liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m)
+   cxt' <- lift $ lift $ get
+   
+   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m) ++ " from " ++ (show (peerId cxt'))
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
-         liftIO $ putStrLn $ "replying to hello"
+--         liftIO $ putStrLn $ "replying to hello"
          sendMsgConduit Hello {
                              version = 4,
                              clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
@@ -75,19 +77,19 @@ respondMsgConduit m = do
                            }
        Ping -> do
          _ <- lift $ lift $ lift $   addPingCountLite
-         liftIO $ putStrLn $ "replying to ping"
+--         liftIO $ putStrLn $ "replying to ping"
          sendMsgConduit Pong
        GetPeers -> do
-         liftIO $ putStrLn $ "peer asked for peers"
+--         liftIO $ putStrLn $ "peer asked for peers"
          sendMsgConduit $ Peers []
          sendMsgConduit GetPeers      
        BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
        GetBlockHashes h maxBlocks -> do
-         liftIO $ putStrLn $ "peer requested: " ++ (show maxBlocks) ++  " block hashes, starting with: " ++ (show h)
+--         liftIO $ putStrLn $ "peer requested: " ++ (show maxBlocks) ++  " block hashes, starting with: " ++ (show h)
          hashes <- lift $ lift $ getBlockHashes h maxBlocks
          sendMsgConduit $ BlockHashes hashes 
        GetBlocks shaList -> do
-         liftIO $ putStrLn $ "peer requested blocks"
+--         liftIO $ putStrLn $ "peer requested blocks"
          blks <- lift $ lift $ handleBlockRequest shaList
          sendMsgConduit $ Blocks blks
        Blocks blocks -> liftIO $ putStrLn "got new blocks"
