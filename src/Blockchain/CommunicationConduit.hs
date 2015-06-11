@@ -109,11 +109,13 @@ respondMsgConduit m = do
        GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
        
-handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+--handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 handleMsgConduit = awaitForever $ \mn -> do
+  liftIO $ putStrLn "onion"
   case mn of
     (EthMessage m) -> respondMsgConduit m
-    (Notif (TransactionNotification n)) -> do -- liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
+    (Notif (TransactionNotification n)) -> do
+         liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
          tx <- lift $ lift $ getTransactionFromNotif n
          sendMsgConduit $ Transactions (map rawTX2TX tx)
     _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
@@ -142,8 +144,9 @@ sendMsgConduit msg = do
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
   
 
-recvMsgConduit :: MonadIO m => (TBMChan MessageOrNotification) -> Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
-recvMsgConduit chan = do
+recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
+--recvMsgConduit :: MonadIO m => Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
+recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
 
@@ -175,7 +178,7 @@ recvMsgConduit chan = do
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
   fullFrame <- lift $ lift $ decrypt (BL.toStrict frameCipher)
 
-  -- liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
+  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
@@ -183,14 +186,7 @@ recvMsgConduit chan = do
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
 
---  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
-  nextNotif <- liftIO $ atomically  $ tryReadTBMChan chan    -- sort of a polling approach which is unfortunate, but we'll live with it for now
-
-  case nextNotif of
-      (Just Nothing) -> recvMsgConduit chan
-      (Nothing) -> recvMsgConduit chan          -- channel is closed, I think
-      (Just (Just msg)) -> do { yield msg; recvMsgConduit chan }
-      _ -> recvMsgConduit chan
+  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
 
       
 bXor::B.ByteString->B.ByteString->B.ByteString

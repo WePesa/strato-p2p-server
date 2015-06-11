@@ -39,7 +39,7 @@ import qualified Data.Binary as BN
 
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import qualified Data.ByteString as BS
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 
 import           Blockchain.Data.Wire hiding (Ping, Pong)
@@ -124,17 +124,17 @@ udpHandshakeServer prv cxt conn = do
 
    putStrLn $ "connection from ip: " ++ ip
    
-   let r = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msg
-       s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msg
-       v = head . BS.unpack $ BS.take 1 $ BS.drop 96 msg
+   let r = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ msg
+       s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 64 msg
+       v = head . B.unpack $ B.take 1 $ B.drop 96 msg
 
-       theType = head . BS.unpack $ BS.take 1$ BS.drop 97 msg
-       theRest = BS.unpack $ BS.drop 98 msg
+       theType = head . B.unpack $ B.take 1$ B.drop 97 msg
+       theRest = B.unpack $ B.drop 98 msg
        (rlp, _) = rlpSplit theRest
 
        signature = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
                          
-       SHA messageHash = hash $ BS.pack $ [theType] ++ BS.unpack (rlpSerialize rlp)
+       SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
        otherPubkey = getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
 {-
@@ -148,7 +148,7 @@ udpHandshakeServer prv cxt conn = do
    putStrLn $ "v:       " ++ (show $ B16.encode $ BS.take 1 $ BS.drop 96 $ msg)
 -}
 
-   putStrLn $ "other pubkey: " ++ (show $ B16.encode $ BS.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
+   putStrLn $ "other pubkey: " ++ (show $ B16.encode $ B.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
    putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
    
    time <-  round `fmap` getPOSIXTime
@@ -156,8 +156,8 @@ udpHandshakeServer prv cxt conn = do
    let (theType, theRLP) = ndPacketToRLP $
                                 (Pong (Endpoint "127.0.0.1" 30303 30303) 4 (time+50):: NodeDiscoveryPacket)
                                 
-       theData = BS.unpack $ rlpSerialize theRLP
-       SHA theMsgHash = hash $ BS.pack $ (theType:theData)
+       theData = B.unpack $ rlpSerialize theRLP
+       SHA theMsgHash = hash $ B.pack $ (theType:theData)
 
    ExtendedSignature signature yIsOdd <- liftIO $ H.withSource H.devURandom $ ecdsaSign  prv theMsgHash
 
@@ -165,7 +165,7 @@ udpHandshakeServer prv cxt conn = do
        r = H.sigR signature
        s = H.sigS signature
        theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
-       theHash = BS.unpack $ SHA3.hash 256 $ BS.pack $ theSignature ++ [theType] ++ theData
+       theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
 
    cxt' <- readTVarIO cxt
    let prevPeers = peers cxt'
@@ -173,7 +173,7 @@ udpHandshakeServer prv cxt conn = do
    atomically $ writeTVar cxt (cxt'{peers=(Map.insert ip (hPubKeyToPubKey otherPubkey) prevPeers)} )
 
    putStrLn $ "about to send PONG"
-   _ <- NB.sendTo conn ( BS.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
+   _ <- NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
    
    udpHandshakeServer prv cxt conn
    return () 
@@ -197,8 +197,8 @@ theCurve = getCurveByName SEC_p256k1
 ethHPrvKey ::H.PrvKey
 Just ethHPrvKey = H.makePrvKey 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38e
 
-add :: BS.ByteString->BS.ByteString->BS.ByteString
-add acc val | BS.length acc ==32 && BS.length val == 32 = SHA3.hash 256 $ val `BS.append` acc
+add :: B.ByteString->B.ByteString->B.ByteString
+add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
 add _ _ = error "add called with ByteString of length not 32"
 
 intToBytes::Integer->[Word8]
@@ -210,7 +210,7 @@ ctr=[0,0,0,1]
 s1::[Word8]
 s1 = []
 
-tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM BS.ByteString BS.ByteString IO EthCryptStateLite
+tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv otherPoint = go
   where
   go = do
@@ -230,7 +230,7 @@ tcpHandshakeServer prv otherPoint = go
 --    let otherPointBytes = BS.unpack $ BS.take 64 (BS.drop 1 hsBytesStr)
 --    let otherPoint = bytesToPoint $ otherPointBytes
     
-    let iv = BS.replicate 16 0
+    let iv = B.replicate 16 0
             
 --    lift $ putStrLn $ "received from pubkey: " ++ (show $ B16.encode $ BS.pack otherPointBytes)
     lift $ putStrLn $ "received from pubkey: " ++ (show $ otherPoint)
@@ -245,11 +245,11 @@ tcpHandshakeServer prv otherPoint = go
 --    lift $ putStrLn $ "test: prv: " ++ (show prv)
     
     let SharedKey sharedKey = getShared theCurve prv otherPoint
-        otherNonce = BS.take 32 $ BS.drop 161 $ eceisMsgIBytes
-        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ BS.unpack otherNonce)
-        r = bytesToWord256 $ BS.unpack $ BS.take 32 $ eceisMsgIBytes
-        s = bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 32 $ eceisMsgIBytes
-        v = head . BS.unpack $ BS.take 1 $ BS.drop 64 eceisMsgIBytes
+        otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
+        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
+        r = bytesToWord256 $ B.unpack $ B.take 32 $ eceisMsgIBytes
+        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eceisMsgIBytes
+        v = head . B.unpack $ B.take 1 $ B.drop 64 eceisMsgIBytes
         yIsOdd = v == 1
 
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
@@ -292,14 +292,14 @@ tcpHandshakeServer prv otherPoint = go
   --  lift $ putStrLn $ "otherEphemeral bytes      : " ++ (show $ pointToBytes otherEphemeral)
   --  lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
 
-    let myNonceBS = BS.pack $ word256ToBytes myNonce
-        shared2' = BS.pack $ intToBytes sharedKey2
+    let myNonceBS = B.pack $ word256ToBytes myNonce
+        shared2' = B.pack $ intToBytes sharedKey2
 
         -- frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
         -- macEncKey = frameDecKey `add` shared2'
 
-        frameDecKey = otherNonce `add` myNonceBS `add` (BS.pack ephemeralSharedSecretBytes) `add` (BS.pack ephemeralSharedSecretBytes)
-        macEncKey = frameDecKey `add` (BS.pack ephemeralSharedSecretBytes)
+        frameDecKey = otherNonce `add` myNonceBS `add` (B.pack ephemeralSharedSecretBytes) `add` (B.pack ephemeralSharedSecretBytes)
+        macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
         
 --    lift $  putStrLn $ "otherNonce: " ++ (show $ BS.unpack otherNonce)
  --   lift $  putStrLn $ "myNonce:    " ++ (show $ BS.unpack myNonceBS)
@@ -313,13 +313,13 @@ tcpHandshakeServer prv otherPoint = go
 
     let cState =
           EthCryptStateLite {
-            encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ BS.replicate 16 0) 0,
-            decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ BS.replicate 16 0) 0,
+            encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+            decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
             egressMAC=SHA3.update (SHA3.init 256) $
-                     (macEncKey `bXor` otherNonce) `BS.append` eceisMsgOBytes,
+                     (macEncKey `bXor` otherNonce) `B.append` eceisMsgOBytes,
             egressKey=macEncKey,
             ingressMAC=SHA3.update (SHA3.init 256) $ 
-                     (macEncKey `bXor` myNonceBS) `BS.append` (BL.toStrict hsBytes),
+                     (macEncKey `bXor` myNonceBS) `B.append` (BL.toStrict hsBytes),
             ingressKey=macEncKey,
             peerId = calculatePublic theCurve prv
           }
@@ -354,17 +354,23 @@ parseNotifPayload s = read $ last $ splitOn "," s :: Int
 
 bufSize = 16
 
-listenConn :: PS.Connection -> IO MessageOrNotification
-listenConn conn = do
+--notificationSource::MonadIO m=>PS.Connection->Source m Notification
+notificationSource::PS.Connection->Source IO Notification
+notificationSource conn = forever $ do
     res <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
-    liftIO $ putStrLn ("should be listening, with result: " ++ show res)
     notif <- liftIO $ getNotification conn
+    yield notif
+
+{-
+    liftIO $ putStrLn ("should be listening, with result: " ++ show res)
     liftIO $ putStrLn $ "got notification on channel new_transaction"
     liftIO $ putStrLn . show . notificationChannel $ notif
     liftIO $ putStrLn . show . notificationPid $ notif
     liftIO $ putStrLn . show . notificationData $ notif
-    return . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
-    
+return . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
+-}
+
+{-
 listenChan :: PS.Connection -> IO (TBMChan MessageOrNotification)
 listenChan conn = do
     chan <- atomically $ newTBMChan bufSize
@@ -379,8 +385,27 @@ listenChan conn = do
       putStrLn $ "in forkListener, after listen - writing atomically"
       atomically $ writeTBMChan chan next
       forkListener chan conn	
+-}
 
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
+
+--type EthCryptMLite a = StateT EthCryptStateLite a
+--type ContextMLite = StateT ContextLite DBMLite
+--type DBMLite = StateT DBsLite (ResourceT IO)
+
+--EthCryptMLite ContextMLite a = StateT EthCryptStateLite (StateT ContextLite (StateT DBsLite (Resource IO)))
+
+runEthCryptMLite::DBsLite->ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
+runEthCryptMLite db cxt cState f = do
+  _ <- runResourceT $
+       flip runStateT db $
+       flip runStateT cxt $
+       flip runStateT cState $
+       f
+  return ()
+
+runContextMLite::ContextMLite a->IO a
+runContextMLite = undefined
 
 main :: IO ()
 main = do
@@ -395,17 +420,44 @@ main = do
 --  let myPublic = calculatePublic theCurve myPriv
   let myPublic = calculatePublic theCurve (fromIntegral myPriv)
 
-  putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ BS.pack $ pointToBytes myPublic)
+  putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ B.pack $ pointToBytes myPublic)
   putStrLn $ "as a point:   " ++ (show myPublic)
   
   cxt <- initContextLite
   tCxt <- newTVarIO cxt
 
   createTrigger (notifHandler cxt)
-  
+
   async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
   runResourceT $ do
+    db <- openDBsLite connStr
+    lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
+      curr <- readTVarIO tCxt
+      putStrLn $ "current context: " ++ (show curr)
+      
+      (initCond,cState) <-
+        appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
+
+      runEthCryptMLite db cxt cState $ do
+        let rSource = appSource app
+            nSource = notificationSource (notifHandler cxt)
+                      =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)
+
+        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+
+
+        runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app 
+
+
+--        return () 
+
+
+
+  return ()
+
+{-
+runResourceT $ do
     db <- openDBsLite connStr
     _ <- flip runStateT db $
            flip runStateT cxt $
@@ -423,22 +475,36 @@ main = do
 
                     putStrLn $ "connection established, now handling messages"
 
-                    chan <- listenChan (notifHandler cxt)
+                    let nSource = notificationSource (notifHandler cxt)
+                                  =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)
+
+
+                    mSource <- (runResourceT $ mergeSources [nSource] 2)::IO (Source (ResourceT IO) MessageOrNotification)
                     
-                    runResourceT $ do
-                       _ <- flip runStateT db $
-                         flip runStateT cxt $
-                           flip runStateT cState $
-                             runResourceT $ do
-                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
-                                   (recvMsgConduit chan) =$= handleMsgConduit  `fuseUpstream` appSink app
+                    let rSource =
+                          runResourceT $ 
+                          flip runStateT db $
+                          flip runStateT cxt $
+                          flip runStateT cState $
+                          runResourceT $ do
+                            recvMsgConduit
+                               
+                    mSource' <- (mergeSources [rSource] 2) -- ::IO (Source (ResourceT IO) MessageOrNotification)
+                               
+--                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
+--                                   (recvMsgConduit chan) =$= handleMsgConduit  `fuseUpstream` appSink app 
+                    transPipe (lift . lift . lift . lift) mSource' $$ handleMsgConduit  `fuseUpstream` appSink app 
                    
-                       return ()
+                    --   return ()
+
+--                    runResourceT $ mSource =$= handleMsgConduit $$ appSink app
 
                     putStrLn $ "closed session with: " ++ (show $ appSockAddr app)
 
+-}
+
                      
-    return ()
+
  
     
   
