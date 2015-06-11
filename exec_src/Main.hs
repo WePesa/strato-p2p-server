@@ -162,9 +162,6 @@ hPubKeyToPubKey (H.PubKey hPoint) = Point (fromIntegral x) (fromIntegral y)
 theCurve :: Curve
 theCurve = getCurveByName SEC_p256k1
 
-ethHPrvKey ::H.PrvKey
-Just ethHPrvKey = H.makePrvKey 0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620e3d9b38e
-
 add :: B.ByteString->B.ByteString->B.ByteString
 add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
 add _ _ = error "add called with ByteString of length not 32"
@@ -262,7 +259,7 @@ createTrigger conn = do
     \     RETURN NULL; \n\
     \ END; \n\
 \ $tx_notify$ LANGUAGE plpgsql; \n\
-\ CREATE TRIGGER tx_notify AFTER INSERT OR UPDATE OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
+\ CREATE TRIGGER tx_notify AFTER INSERT OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
 
      putStrLn $ "created trigger with result: " ++ (show res2)
 
