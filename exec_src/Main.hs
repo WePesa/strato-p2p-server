@@ -14,48 +14,30 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 
 import           Conduit
-import           Data.Conduit
 import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
-import qualified Data.Conduit.Network.UDP as UDP
 import qualified Data.Conduit.Binary as CBN
 import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as NB
 import           Network.Haskoin.Crypto 
 
-import qualified Data.ByteString.Char8 as C
 import           Data.Conduit.TMChan
-import           Text.Printf              (printf)
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
-import           Data.Word8               (_cr)
 import           Control.Monad
-import           Control.Concurrent       (forkIO)
 import           Control.Concurrent.Async 
 import           Control.Exception
-import           Blockchain.Data.DataDefs 
 import qualified Data.Binary as BN
 
 
-import           Data.Time
 import           Data.Time.Clock.POSIX
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 
-import           Blockchain.Data.Wire hiding (Ping, Pong)
 import           Blockchain.UDP
-import           Blockchain.Data.Address
 import           Blockchain.SHA
-import           Blockchain.Data.Transaction
-import           Blockchain.Util
-import           Blockchain.Database.MerklePatricia
 import           Blockchain.Data.RLP
 import           Blockchain.ExtWord
-import           Blockchain.Format
-import           Blockchain.RLPx
-import           Blockchain.Frame
-import           Blockchain.Communication
-import           Blockchain.Handshake
 import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
@@ -63,32 +45,19 @@ import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.DBM
 
-import qualified Database.Persist            as P
-import qualified Database.Esqueleto          as E
-import qualified Database.Persist.Postgresql as SQL
-
-import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
-import           Database.Persist.TH
 
 import           Data.Maybe
 import           Control.Monad.State
-import           Control.Monad.Reader
-import           Control.Monad.Trans
-import           Control.Monad.Trans.Resource
-import           Control.Monad.Logger
-import           Control.Monad.IO.Class
 import           Prelude 
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
-import           System.Entropy
-import           System.Environment
+--import           System.Entropy
 
 import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
 import           Crypto.Random
 import qualified Crypto.Hash.SHA3 as SHA3
-import qualified Crypto.Hash.SHA256 as SHA256
 
 import           Crypto.Cipher.AES
 
@@ -97,9 +66,8 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Data.List.Split
-import           Control.Applicative
-import           Control.Concurrent.STM.TBMChan
 
+portS::String
 portS = "30303"
 
 thePort :: Int
@@ -204,45 +172,18 @@ add _ _ = error "add called with ByteString of length not 32"
 intToBytes::Integer->[Word8]
 intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
 
-ctr::[Word8]
-ctr=[0,0,0,1]
-
-s1::[Word8]
-s1 = []
-
 tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv otherPoint = go
   where
   go = do
     hsBytes <- CBN.take 307
     
-    let hsBytesStr = (BL.toStrict $ hsBytes)
-        
     let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
         eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
 
---    lift $ putStrLn $ "length of decrypted message: " ++ (show $ BS.length eceisMsgIBytes)
---    lift $ putStrLn $ "decrypted message: " ++ (show $ BS.unpack eceisMsgIBytes)
-    
---    let otherEphemeralBytes = BS.unpack $ BS.take 64 $ BS.drop 1 hsBytesStr
-  --      otherEphemeral = bytesToPoint otherEphemeralBytes
---        lift $ putStrLn $ "pubkey, maybe: " ++ (show $ bytesToPoint $ BS.unpack $ BS.take 64 (BS.drop 1 msgBytes))
---    let otherPointBytes = BS.unpack $ BS.take 64 (BS.drop 1 hsBytesStr)
---    let otherPoint = bytesToPoint $ otherPointBytes
-    
     let iv = B.replicate 16 0
             
---    lift $ putStrLn $ "received from pubkey: " ++ (show $ B16.encode $ BS.pack otherPointBytes)
     lift $ putStrLn $ "received from pubkey: " ++ (show $ otherPoint)
-    
- --   lift $ putStrLn $ "received: " ++ (show . BS.length $ hsBytesStr) ++ " bytes "
-
-   -- lift $ putStrLn $ "received msg: " ++ (show eceisMsgIncoming)
-  --  lift $ putStrLn $ "ciphertext bytes: " ++ (show . BS.length $ eceisCipher eceisMessage)
-        
-  --  lift $ putStrLn $ "decrypted msg bytes: " ++ (show . BS.length $ msgBytes)
---    lift $ putStrLn $ "decrypted msg: " ++ (show $ eceisMsgIBytes)
---    lift $ putStrLn $ "test: prv: " ++ (show prv)
     
     let SharedKey sharedKey = getShared theCurve prv otherPoint
         otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
@@ -266,25 +207,12 @@ tcpHandshakeServer prv otherPoint = go
         
     let myNonce = 25 :: Word256
 
---    lift $ putStrLn $ "my ephemeral: " ++ (show $ B16.encode $ BS.pack $ pointToBytes myEphemeral)
---    lift $ putStrLn $ "my ephemeral as a point: " ++ (show $ myEphemeral)
---    let otherNonce = (BL.toStrict $ BN.encode sharedKey) `bXor` (BS.take 32 $ BS.drop 64 msgBytes)
-            
- --   lift $ putStrLn $ "otherNonce: " ++ (show $ otherNonce)
-     
- --   lift $ putStrLn $ "otherNonce2: " ++ (show $ (bytesToWord256 $ BS.unpack $ BS.take 32 $ BS.drop 64 msgBytes))
-
     let ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False } 
 
     let eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
     let eceisMsgOBytes = BL.toStrict $ BN.encode eceisMsgOutgoing
             
---    lift $ putStrLn $ "sending back: " ++ (show $ eceisMsgOutgoing)
     yield $ eceisMsgOBytes
-
-    let SharedKey sharedKey2 = getShared theCurve myPriv otherPoint
-    
-  --  lift $ putStrLn $ "shared key 2: " ++ (show $ intToBytes sharedKey2)
 
     let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
         ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
@@ -293,7 +221,6 @@ tcpHandshakeServer prv otherPoint = go
   --  lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
 
     let myNonceBS = B.pack $ word256ToBytes myNonce
-        shared2' = B.pack $ intToBytes sharedKey2
 
         -- frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
         -- macEncKey = frameDecKey `add` shared2'
@@ -301,16 +228,6 @@ tcpHandshakeServer prv otherPoint = go
         frameDecKey = otherNonce `add` myNonceBS `add` (B.pack ephemeralSharedSecretBytes) `add` (B.pack ephemeralSharedSecretBytes)
         macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
         
---    lift $  putStrLn $ "otherNonce: " ++ (show $ BS.unpack otherNonce)
- --   lift $  putStrLn $ "myNonce:    " ++ (show $ BS.unpack myNonceBS)
- 
- --  lift $  putStrLn $ "otherNonce `add` myNonce: " ++ (show $ BS.unpack $ (otherNonce `add` myNonceBS))
- --   lift $  putStrLn $ "otherNonce `add` myNonce `add` shared: " ++ (show  $ BS.unpack $ (otherNonce `add` myNonceBS) `add` shared2' )
-    
-
---    lift $  putStrLn $ "frameDecKey: " ++ (show $ BS.unpack $ frameDecKey)
---    lift $  putStrLn $ "macEncKey: " ++ (show $ BS.unpack $ macEncKey)
-
     let cState =
           EthCryptStateLite {
             encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
@@ -326,13 +243,14 @@ tcpHandshakeServer prv otherPoint = go
 
     return cState
 
+connStr::BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
 sockAddrToIP :: S.SockAddr -> String
-sockAddrToIP (S.SockAddrInet6 port _ host _) = show host
+sockAddrToIP (S.SockAddrInet6 _ _ host _) = show host
 -- sockAddrToIP (S.SockAddrInet port host) = show host   -- convert to dot dash
 sockAddrToIP (S.SockAddrUnix str) = str
-sockAddrToIP addr = takeWhile (\t -> t /= ':') (show addr)
+sockAddrToIP addr' = takeWhile (\t -> t /= ':') (show addr')
   --takeWhile (\t -> t /= ']') $ drop 1 $ (dropWhile (\t -> t /= ':') (drop 3 (show addr)))
 
 createTrigger :: PS.Connection -> IO ()
@@ -352,48 +270,15 @@ createTrigger conn = do
 parseNotifPayload :: String -> Int
 parseNotifPayload s = read $ last $ splitOn "," s :: Int
 
-bufSize = 16
-
 --notificationSource::MonadIO m=>PS.Connection->Source m Notification
 notificationSource::PS.Connection->Source IO Notification
 notificationSource conn = forever $ do
-    res <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
+    _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     notif <- liftIO $ getNotification conn
     yield notif
 
-{-
-    liftIO $ putStrLn ("should be listening, with result: " ++ show res)
-    liftIO $ putStrLn $ "got notification on channel new_transaction"
-    liftIO $ putStrLn . show . notificationChannel $ notif
-    liftIO $ putStrLn . show . notificationPid $ notif
-    liftIO $ putStrLn . show . notificationData $ notif
-return . Notif .  TransactionNotification .  parseNotifPayload $ BC.unpack . notificationData $ notif
--}
-
-{-
-listenChan :: PS.Connection -> IO (TBMChan MessageOrNotification)
-listenChan conn = do
-    chan <- atomically $ newTBMChan bufSize
-    forkListener chan conn
-    putStrLn $ "in listenChan, after forkListener"
-    return chan
-
-  where
-    forkListener chan conn = void . forkIO $ do
-      putStrLn $ "in forkListener, about to listen"
-      next <- listenConn conn
-      putStrLn $ "in forkListener, after listen - writing atomically"
-      atomically $ writeTBMChan chan next
-      forkListener chan conn	
--}
-
+privateKey::Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
-
---type EthCryptMLite a = StateT EthCryptStateLite a
---type ContextMLite = StateT ContextLite DBMLite
---type DBMLite = StateT DBsLite (ResourceT IO)
-
---EthCryptMLite ContextMLite a = StateT EthCryptStateLite (StateT ContextLite (StateT DBsLite (Resource IO)))
 
 runEthCryptMLite::DBsLite->ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
 runEthCryptMLite db cxt cState f = do
@@ -404,13 +289,11 @@ runEthCryptMLite db cxt cState f = do
        f
   return ()
 
-runContextMLite::ContextMLite a->IO a
-runContextMLite = undefined
-
 main :: IO ()
 main = do
-  entropyPool <- liftIO createEntropyPool
 {-
+  entropyPool <- liftIO createEntropyPool
+
   let g = cprgCreate entropyPool :: SystemRNG
       (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
 -}
@@ -428,15 +311,15 @@ main = do
 
   createTrigger (notifHandler cxt)
 
-  async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
+  _ <- async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
-  runResourceT $ do
+  _ <- runResourceT $ do
     db <- openDBsLite connStr
     lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
       curr <- readTVarIO tCxt
       putStrLn $ "current context: " ++ (show curr)
       
-      (initCond,cState) <-
+      (_,cState) <-
         appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
 
       runEthCryptMLite db cxt cState $ do
@@ -449,62 +332,5 @@ main = do
 
         runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app 
 
-
---        return () 
-
-
-
   return ()
-
-{-
-runResourceT $ do
-    db <- openDBsLite connStr
-    _ <- flip runStateT db $
-           flip runStateT cxt $
-                  
-                  lift $ lift $ lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
-                    putStrLn $ "connection: appSockAddr: " ++ (show (appSockAddr app))
-      
-                    curr <- readTVarIO tCxt
-                    putStrLn $ "current context: " ++ (show curr)
-
-                     
-                    (initCond,cState) <-
-                      appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
-                    (unwrap, _) <- unwrapResumable initCond
-
-                    putStrLn $ "connection established, now handling messages"
-
-                    let nSource = notificationSource (notifHandler cxt)
-                                  =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)
-
-
-                    mSource <- (runResourceT $ mergeSources [nSource] 2)::IO (Source (ResourceT IO) MessageOrNotification)
-                    
-                    let rSource =
-                          runResourceT $ 
-                          flip runStateT db $
-                          flip runStateT cxt $
-                          flip runStateT cState $
-                          runResourceT $ do
-                            recvMsgConduit
-                               
-                    mSource' <- (mergeSources [rSource] 2) -- ::IO (Source (ResourceT IO) MessageOrNotification)
-                               
---                               (transPipe (lift . lift . lift . lift . lift) unwrap) $$
---                                   (recvMsgConduit chan) =$= handleMsgConduit  `fuseUpstream` appSink app 
-                    transPipe (lift . lift . lift . lift) mSource' $$ handleMsgConduit  `fuseUpstream` appSink app 
-                   
-                    --   return ()
-
---                    runResourceT $ mSource =$= handleMsgConduit $$ appSink app
-
-                    putStrLn $ "closed session with: " ++ (show $ appSockAddr app)
-
--}
-
-                     
-
- 
-    
   
