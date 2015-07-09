@@ -103,7 +103,7 @@ udpHandshakeServer prv cxt conn = do
        signature = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
                          
        SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
-       otherPubkey = getPubKeyFromSignature signature messageHash  
+       otherPubkey = fromMaybe (error "malformed signature in udpHandshakeServer") $ getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
 {-
    putStrLn $ "r:       " ++ (show r)
@@ -193,7 +193,7 @@ tcpHandshakeServer prv otherPoint = go
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
 
 
-        otherEphemeral = hPubKeyToPubKey $ getPubKeyFromSignature extSig msg
+        otherEphemeral = hPubKeyToPubKey $ fromMaybe (error "malformed signature in tcpHandshakeServer") $ getPubKeyFromSignature extSig msg
 
 
     entropyPool <- liftIO createEntropyPool

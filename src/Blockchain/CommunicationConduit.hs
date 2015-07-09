@@ -141,7 +141,9 @@ sendMsgConduit msg = do
   frameMAC <- lift $ lift $ updateEgressMac =<< rawUpdateEgressMac frameCipher
 
 
+  liftIO $ putStrLn "before yield"
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
+  liftIO $ putStrLn "after yield"
   
 
 recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
