@@ -66,8 +66,11 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Data.List.Split
+import           Blockchain.UDP
+import           System.Environment
+import           Blockchain.PeerUrls
 
-portS::String
+portS :: String
 portS = "30303"
 
 thePort :: Int
@@ -80,7 +83,6 @@ connectMe = do
                       Nothing (Just portS)
   sock <- S.socket (S.addrFamily serveraddr) S.Datagram S.defaultProtocol
   S.bindSocket sock (S.addrAddress serveraddr) >> return sock
-
 
 udpHandshakeServer :: H.PrvKey -> TContext -> S.Socket  -> IO ()
 udpHandshakeServer prv cxt conn = do
@@ -105,16 +107,6 @@ udpHandshakeServer prv cxt conn = do
        SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
        otherPubkey = fromMaybe (error "malformed signature in udpHandshakeServer") $ getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
-{-
-   putStrLn $ "r:       " ++ (show r)
-   putStrLn $ "r:       " ++ (show $ B16.encode $ BS.take 32 $ BS.drop 32 $ msg)
-   putStrLn $ "r:       " ++ (show $ BS.unpack $ BS.take 32 $ BS.drop 32 $ msg)                              
-   putStrLn $ "s:       " ++ (show s)
-   putStrLn $ "s:       " ++ (show $ B16.encode $ BS.take 32 $ BS.drop 64 $ msg)
-   putStrLn $ "s:       " ++ (show $ BS.unpack $ BS.take 32 $ BS.drop 64 $ msg)
-   putStrLn $ "v:       " ++ (show v)
-   putStrLn $ "v:       " ++ (show $ B16.encode $ BS.take 1 $ BS.drop 96 $ msg)
--}
 
    putStrLn $ "other pubkey: " ++ (show $ B16.encode $ B.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
    putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
@@ -264,10 +256,9 @@ createTrigger conn = do
      putStrLn $ "created trigger with result: " ++ (show res2)
 
 
-parseNotifPayload :: String -> Int
+parseNotifPayload::String -> Int
 parseNotifPayload s = read $ last $ splitOn "," s :: Int
 
---notificationSource::MonadIO m=>PS.Connection->Source m Notification
 notificationSource::PS.Connection->Source IO Notification
 notificationSource conn = forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
@@ -294,9 +285,23 @@ main = do
   let g = cprgCreate entropyPool :: SystemRNG
       (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
 -}
+  args <- getArgs
+
+  let (ipAddress, thePort') =
+        case args of
+          [] -> ipAddresses !! 1 --default server                                                                  
+          [x] -> ipAddresses !! read x
+          ["-a", address] -> (address, 30303)
+          [x, prt] -> (fst (ipAddresses !! read x), fromIntegral $ read prt)
+          ["-a", address, prt] -> (address, fromIntegral $ read prt)
+          _ -> error "usage: p2p-server [servernum] [port]"
+
 
   let myPriv = privateKey
+  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
       
+  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
+
 --  let myPublic = calculatePublic theCurve myPriv
   let myPublic = calculatePublic theCurve (fromIntegral myPriv)
 

@@ -40,6 +40,7 @@ import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.Transaction
 import Blockchain.Data.BlockDB
+import Blockchain.Format
 
 import Conduit
 import Data.Conduit
@@ -63,7 +64,7 @@ respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)
 respondMsgConduit m = do
    cxt' <- lift $ lift $ get
    
-   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show m) ++ " from " ++ (show (peerId cxt'))
+   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show $ format m) ++ " from " ++ (show (peerId cxt'))
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
@@ -180,7 +181,7 @@ recvMsgConduit = do
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
   fullFrame <- lift $ lift $ decrypt (BL.toStrict frameCipher)
 
-  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
+--  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
   
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
@@ -188,7 +189,7 @@ recvMsgConduit = do
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
 
-  liftIO $ putStrLn $ "just yielded: " ++ (show (obj2WireMessage packetType packetData))
+  liftIO $ putStrLn $ "just yielded: " ++ (show $ format $ (obj2WireMessage packetType packetData))
 
       
 bXor::B.ByteString->B.ByteString->B.ByteString
