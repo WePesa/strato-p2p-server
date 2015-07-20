@@ -1,11 +1,6 @@
 
 module Blockchain.TCPServer (
   runEthCryptMLite,
-  theCurve,
-  hPubKeyToPubKey,
-  ecdsaSign,
-  intToBytes,
-  sockAddrToIP,
   tcpHandshakeServer  
   ) where
 
@@ -75,6 +70,7 @@ import           Crypto.Random
 import qualified Crypto.Hash.SHA3 as SHA3
 
 import           Crypto.Cipher.AES
+import           Blockchain.P2PUtil
 
 runEthCryptMLite::DBsLite->ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
 runEthCryptMLite db cxt cState f = do
@@ -84,32 +80,11 @@ runEthCryptMLite db cxt cState f = do
        flip runStateT cState $
        f
   return ()
-                                                    
-theCurve :: Curve
-theCurve = getCurveByName SEC_p256k1
-
-hPubKeyToPubKey::H.PubKey->Point
-hPubKeyToPubKey (H.PubKeyU _) = error "PubKeyU not supported in hPubKeyToPUbKey yet"
-hPubKeyToPubKey (H.PubKey hPoint) = Point (fromIntegral x) (fromIntegral y)
-  where
-     x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX hPoint
-     y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY hPoint
-
-ecdsaSign::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
-ecdsaSign prvKey' theHash = do
-    extSignMsg theHash prvKey'    
 
 add :: B.ByteString->B.ByteString->B.ByteString
 add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
 add _ _ = error "add called with ByteString of length not 32"
 
-intToBytes::Integer->[Word8]
-intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
-
-sockAddrToIP :: S.SockAddr -> String
-sockAddrToIP (S.SockAddrInet6 _ _ host _) = show host
-sockAddrToIP (S.SockAddrUnix str) = str
-sockAddrToIP addr' = takeWhile (\t -> t /= ':') (show addr')
 
 tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv otherPoint = go
