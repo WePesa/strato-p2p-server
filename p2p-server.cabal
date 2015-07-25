@@ -64,7 +64,7 @@ executable p2p-server
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
   default-language: Haskell2010      
-  
+  extra-libraries: pthread 
   
 library
   build-depends:       base >=4.7 && <4.8,
@@ -114,13 +114,10 @@ library
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,
-                   Blockchain.BlockSynchronizerSql,
-                   Blockchain.TCPServer,
-                   Blockchain.UDPServer,
-                   Blockchain.P2PUtil,
-                   Blockchain.TriggerNotify
+                   Blockchain.BlockSynchronizerSql
   hs-source-dirs:      src
   default-language:    Haskell2010
+  extra-libraries: pthread
 
         
 	
