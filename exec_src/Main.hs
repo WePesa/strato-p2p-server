@@ -103,9 +103,9 @@ main = do
 
 
   let myPriv = privateKey
-  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
+--  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
       
-  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
+--  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
 
 --  let myPublic = calculatePublic theCurve myPriv
   let myPublic = calculatePublic theCurve (fromIntegral myPriv)
