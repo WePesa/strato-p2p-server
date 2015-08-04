@@ -100,7 +100,7 @@ respondMsgConduit m = do
              liftIO $ putStrLn $ "replying to status, best blockHash: " ++ (show h)
              sendMsgConduit Status{
                               protocolVersion=fromIntegral ethVersion,
-                              networkID="",
+                              networkID=1,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
                               genesisHash=(SHA 0xfd4af92a79c7fc2fd8bf0d342f2e832e1d4f485c85b9152d2039e03bc604fdca)   
