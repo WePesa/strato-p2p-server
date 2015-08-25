@@ -72,9 +72,10 @@ import           Blockchain.TCPServer
 import           Blockchain.UDPServer
 import           Blockchain.P2PUtil
 import           Blockchain.TriggerNotify
+import           Control.Applicative
 
-thePort :: Int
-thePort = 30303
+defaultListenPort :: Int
+defaultListenPort = 30305
 
 connStr::BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
@@ -103,11 +104,18 @@ main = do
 
 
   let myPriv = privateKey
---  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
-      
---  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
 
---  let myPublic = calculatePublic theCurve myPriv
+  serverPubKeyAsync <- async $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
+  maybeKey <- waitCatch serverPubKeyAsync
+
+  putStrLn $ "server public key is : " ++ (show maybeKey)
+
+
+{-
+  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
+  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
+-}
+
   let myPublic = calculatePublic theCurve (fromIntegral myPriv)
 
   putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ B.pack $ pointToBytes myPublic)
@@ -122,7 +130,7 @@ main = do
 
   _ <- runResourceT $ do
     db <- openDBsLite connStr
-    lift $ runTCPServer (serverSettings thePort "*") $ \app -> do
+    lift $ runTCPServer (serverSettings defaultListenPort "*") $ \app -> do
       curr <- readTVarIO tCxt
       putStrLn $ "current context: " ++ (show curr)
       
@@ -137,7 +145,9 @@ main = do
         mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
-        runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app 
+        runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app
+      
+      
 
   return ()
   
