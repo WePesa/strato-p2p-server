@@ -104,12 +104,12 @@ main = do
 
 
   let myPriv = privateKey
-
+{-
   serverPubKeyAsync <- async $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
   maybeKey <- waitCatch serverPubKeyAsync
 
   putStrLn $ "server public key is : " ++ (show maybeKey)
-
+-}
 
 {-
   serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
@@ -123,14 +123,12 @@ main = do
   
   cxt <- runResourceT $ initContextLite connStr
   tCxt <- newTVarIO cxt
-
   createTrigger (notifHandler cxt)
 
   _ <- async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
   _ <- runResourceT $ do
    
-    db <- openDBsLite connStr
     lift $ runTCPServer (serverSettings defaultListenPort "*") $ \app -> do
       curr <- readTVarIO tCxt
       putStrLn $ "current context: " ++ (show curr)
@@ -138,7 +136,7 @@ main = do
       (_,cState) <-
         appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
 
-      runEthCryptMLite db cxt cState $ do
+      runEthCryptMLite cxt cState $ do
         let rSource = appSource app
             nSource = notificationSource (notifHandler cxt)
                       =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)

@@ -72,10 +72,10 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
 
-runEthCryptMLite::DBsLite->ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
-runEthCryptMLite db cxt cState f = do
+
+runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
+runEthCryptMLite cxt cState f = do
   _ <- runResourceT $
-       flip runStateT db $
        flip runStateT cxt $
        flip runStateT cState $
        f

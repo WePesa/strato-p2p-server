@@ -35,6 +35,8 @@ import Blockchain.Data.RLP
 import Blockchain.Data.Wire
 import Blockchain.Data.DataDefs
 import Blockchain.DBM
+import Blockchain.DB.SQLDB
+
 import Blockchain.RLPx
 import Blockchain.ContextLite
 
@@ -55,8 +57,8 @@ ethVersion = 60
 
 getBestBlockHash :: (EthCryptMLite ContextMLite) (SHA, Integer)
 getBestBlockHash = do
-  cxt <- lift $ lift $ get
-  blks <-  E.runSqlPool actions $ sqlDBLite cxt
+  db <- lift $ getSQLDB
+  blks <-  E.runSqlPool actions $ db
 
   return $ head $ map (\t -> (blockDataRefHash t, blockDataRefTotalDifficulty t))(map E.entityVal (blks :: [E.Entity BlockDataRef])) 
   
@@ -68,8 +70,8 @@ getBestBlockHash = do
 
 getBestBlock :: (EthCryptMLite ContextMLite) Block
 getBestBlock = do
-  cxt <- lift $ lift $ get
-  blks <-  E.runSqlPool actions $ sqlDBLite cxt
+  db <- lift $ getSQLDB
+  blks <-  E.runSqlPool actions $ db
 
   return $ head $ (map E.entityVal (blks :: [E.Entity Block])) 
   
@@ -82,14 +84,14 @@ getBestBlock = do
 
 getBlockHashes :: [SHA] -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
 getBlockHashes shas numBlocks = do
-  cxt <- lift $ lift $ get
+  db <- lift $ getSQLDB
    
-  firstBdRef <- E.runSqlPool (find $ head shas) $ sqlDBLite cxt
+  firstBdRef <- E.runSqlPool (find $ head shas) $ db
 
   let firstNumber = blockDataRefNumber $ (E.entityVal . head) $ firstBdRef
       total = min maxBlockHashes (fromIntegral numBlocks)
       
-  (blks :: [ SQL.Single SHA ] ) <- SQL.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ sqlDBLite cxt
+  (blks :: [ SQL.Single SHA ] ) <- SQL.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ db
 
   let blkShas = map SQL.unSingle blks
         
@@ -128,12 +130,10 @@ shaList2Filter (bdRef, blk) shaList = (foldl1 (E.||.) (map (\sha -> bdRef E.^. B
 handleBlockRequest :: [SHA] -> (EthCryptMLite ContextMLite) [Block]
 handleBlockRequest shaList = do
   let len = length shaList
+      total = min maxBlocks len
 
-  cxt <- lift $ lift $ get
-
-  let total = min maxBlocks len
-      
-  blks <- E.runSqlPool (actions shaList total) $ sqlDBLite cxt
+  db <- lift $ getSQLDB      
+  blks <- E.runSqlPool (actions shaList total) $ db
 
   liftIO $ putStrLn $ "serving: " ++ (show total) ++ " blocks "
   return $ (map E.entityVal (blks :: [E.Entity Block])) 
@@ -156,8 +156,8 @@ handleBlockRequest shaList = do
 
 getTransactionFromNotif :: Int -> (EthCryptMLite ContextMLite ) [RawTransaction]
 getTransactionFromNotif row = do
-    cxt <- lift $ lift $ get
-    tx <- SQL.runSqlPool (actions row) $ sqlDBLite cxt
+    db <- lift $ getSQLDB      
+    tx <- SQL.runSqlPool (actions row) $ db
     return (map SQL.entityVal tx)
 
     where actions nt = SQL.selectList [ RawTransactionId SQL.==. (SQL.toSqlKey $ fromIntegral $ row ) ]

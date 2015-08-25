@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Blockchain.ContextLite (
   ContextLite(..),
@@ -78,7 +80,10 @@ instance Show PS.Connection where
   show conn = "Postgres Simple Connection"
 
 type TContext = TVar ContextLite
-type ContextMLite = StateT ContextLite DBMLite
+type ContextMLite = StateT ContextLite (ResourceT IO)
+
+instance HasSQLDB ContextMLite where
+  getSQLDB = fmap liteSQLDB get
 
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
 initContextLite str = do

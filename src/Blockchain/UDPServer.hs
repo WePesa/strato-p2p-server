@@ -47,7 +47,7 @@ import           Blockchain.P2PUtil
 
 
 portS :: String
-portS = "30303"
+portS = "30305"
 
 connectMe :: IO S.Socket
 connectMe = do
