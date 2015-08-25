@@ -121,7 +121,7 @@ main = do
   putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ B.pack $ pointToBytes myPublic)
   putStrLn $ "as a point:   " ++ (show myPublic)
   
-  cxt <- initContextLite
+  cxt <- runResourceT $ initContextLite connStr
   tCxt <- newTVarIO cxt
 
   createTrigger (notifHandler cxt)
@@ -129,6 +129,7 @@ main = do
   _ <- async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
   _ <- runResourceT $ do
+   
     db <- openDBsLite connStr
     lift $ runTCPServer (serverSettings defaultListenPort "*") $ \app -> do
       curr <- readTVarIO tCxt

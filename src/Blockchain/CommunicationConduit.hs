@@ -77,8 +77,6 @@ respondMsgConduit m = do
                              nodeId = peerId cxt
                            }
        Ping -> do
-         _ <- lift $ lift $ lift $   addPingCountLite
---         liftIO $ putStrLn $ "replying to ping"
          sendMsgConduit Pong
        GetPeers -> do
 --         liftIO $ putStrLn $ "peer asked for peers"

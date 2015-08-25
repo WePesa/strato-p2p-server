@@ -6,7 +6,6 @@ module Blockchain.ContextLite (
   ContextMLite,
   TContext,
  -- isDebugEnabled,
-  addPingCountLite,
   initContextLite,
   EthCryptMLite(..),
   EthCryptStateLite(..)
@@ -23,7 +22,7 @@ import Blockchain.DBM
 import qualified Data.ByteString as B
 import qualified Crypto.Hash.SHA3 as SHA3
 
-import qualified Database.Persist.Sql as SQL
+import qualified Database.Persist.Postgresql as SQL
 import Blockchain.Data.Address
 import Blockchain.Data.AddressStateDB
 import Blockchain.DB.SQLDB
@@ -68,13 +67,10 @@ type EthCryptMLite a = StateT EthCryptStateLite a
 
 data ContextLite =
   ContextLite {
-    neededBlockHashes::[SHA],
-    newBlocks::[Block],        -- for propagating mined blocks, or possibly blocks at the head
-    newTransactions::[Transaction],
-    pingCount::Int,
-    peers:: Map.Map String Point,
-    debugEnabled::Bool,
-    notifHandler::PS.Connection
+    peers:: Map.Map String Point, 
+    liteSQLDB::SQLDB,
+    notifHandler::PS.Connection,
+    debugEnabled::Bool
   } deriving Show
 
 
@@ -84,20 +80,18 @@ instance Show PS.Connection where
 type TContext = TVar ContextLite
 type ContextMLite = StateT ContextLite DBMLite
 
-initContextLite :: IO ContextLite
-initContextLite = do
-  notif <- PS.connect PS.defaultConnectInfo {
+initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
+initContextLite str = do
+  notif <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
             PS.connectPassword = "api",
             PS.connectDatabase = "eth"
            }
-  return  ContextLite {
-                    neededBlockHashes = [],
-                    newBlocks = [],
-                    newTransactions = [],
-                    pingCount = 0,
+  dbs <- openDBsLite str
+  return ContextLite {
                     peers = Map.fromList $ [],
-                    debugEnabled = False,
-                    notifHandler=notif
+                    liteSQLDB = sqlDBLite dbs,                    
+                    notifHandler=notif,
+                    debugEnabled = False
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
@@ -126,11 +120,4 @@ isDebugEnabled = do
   cxt' <- readTVar cxt
   return $ debugEnabled cxt 
 -}
-
-addPingCountLite :: ContextMLite Int
-addPingCountLite = do
-  cxt <- get
-  let pc = (pingCount cxt)+1
-  put cxt{pingCount = pc}
-  return $ pc
 
