@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Blockchain.ContextLite (
   ContextLite(..),
@@ -22,13 +23,14 @@ import Blockchain.DBM
 import qualified Data.ByteString as B
 import qualified Crypto.Hash.SHA3 as SHA3
 
+import qualified Database.Persist.Sql as SQL
 import Blockchain.Data.Address
 import Blockchain.Data.AddressStateDB
+import Blockchain.DB.SQLDB
 import Blockchain.Data.DataDefs
 import Blockchain.Data.Transaction
 
 import Blockchain.Data.RLP
-import qualified Blockchain.Database.MerklePatricia as MPDB
 
 import Blockchain.ExtWord
 import Blockchain.SHA
@@ -46,6 +48,7 @@ import Network.Haskoin.Crypto
 import Control.Concurrent.STM
 
 import qualified Data.Map as Map
+import qualified Data.Text as T
 import qualified Database.PostgreSQL.Simple as PS
 import Database.PostgreSQL.Simple.Notification
 import qualified Blockchain.AESCTR as AES
@@ -96,6 +99,26 @@ initContextLite = do
                     debugEnabled = False,
                     notifHandler=notif
                  }
+
+addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
+addPeer peer = do
+  db <- getSQLDB
+  runResourceT $
+    SQL.runSqlPool actions db
+  where actions = SQL.insert $ peer                      
+
+getPeerByIP :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>String->m (Maybe PPeer)
+getPeerByIP ip = do
+  db <- getSQLDB
+  entPeer <- runResourceT $ SQL.runSqlPool actions db
+  
+  case entPeer of 
+    [] -> return Nothing
+    lst -> return $ Just . SQL.entityVal . head $ lst
+
+  where actions = SQL.selectList [ PPeerIp SQL.==. (T.pack ip) ] []
+
+  
 {-
 isDebugEnabled::ContextMLite Bool
 isDebugEnabled = do
