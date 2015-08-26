@@ -7,8 +7,11 @@ module Blockchain.ContextLite (
   ContextLite(..),
   ContextMLite,
   TContext,
+  runEthCryptMLite,
  -- isDebugEnabled,
   initContextLite,
+  addPeer,
+  getPeerByIP,
   EthCryptMLite(..),
   EthCryptStateLite(..)
   ) where
@@ -23,8 +26,8 @@ import Blockchain.Constants
 import Blockchain.DBM
 import qualified Data.ByteString as B
 import qualified Crypto.Hash.SHA3 as SHA3
-
 import qualified Database.Persist.Postgresql as SQL
+
 import Blockchain.Data.Address
 import Blockchain.Data.AddressStateDB
 import Blockchain.DB.SQLDB
@@ -85,6 +88,15 @@ type ContextMLite = StateT ContextLite (ResourceT IO)
 instance HasSQLDB ContextMLite where
   getSQLDB = fmap liteSQLDB get
 
+runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
+runEthCryptMLite cxt cState f = do
+  _ <- runResourceT $
+       flip runStateT cxt $
+       flip runStateT cState $
+       f
+  return ()
+
+
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
 initContextLite str = do
   notif <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
@@ -104,7 +116,9 @@ addPeer peer = do
   db <- getSQLDB
   runResourceT $
     SQL.runSqlPool actions db
-  where actions = SQL.insert $ peer                      
+  where actions = do
+          peerid <- SQL.insert $ peer        
+          return peerid
 
 getPeerByIP :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>String->m (Maybe PPeer)
 getPeerByIP ip = do

@@ -15,7 +15,6 @@ import           Data.Conduit.TMChan
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Control.Monad
-import           Control.Concurrent.Async 
 import           Control.Exception
 import qualified Data.Binary as BN
 

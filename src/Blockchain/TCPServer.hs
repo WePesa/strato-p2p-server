@@ -1,6 +1,6 @@
 
 module Blockchain.TCPServer (
-  runEthCryptMLite,
+--  runEthCryptMLite,
   tcpHandshakeServer  
   ) where
 
@@ -16,7 +16,6 @@ import           Data.Conduit.TMChan
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Control.Monad
-import           Control.Concurrent.Async 
 import           Control.Exception
 import qualified Data.Binary as BN
 
@@ -72,14 +71,6 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
 
-
-runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
-runEthCryptMLite cxt cState f = do
-  _ <- runResourceT $
-       flip runStateT cxt $
-       flip runStateT cState $
-       f
-  return ()
 
 add :: B.ByteString->B.ByteString->B.ByteString
 add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc

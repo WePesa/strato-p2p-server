@@ -25,7 +25,7 @@ import           Data.Conduit.TMChan
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Control.Monad
-import           Control.Concurrent.Async 
+import           Control.Concurrent.Async.Lifted 
 import           Control.Exception
 import qualified Data.Binary as BN
 
@@ -37,6 +37,7 @@ import qualified Data.ByteString.Base16 as B16
 import           Blockchain.UDP
 import           Blockchain.SHA
 import           Blockchain.Data.RLP
+import           Blockchain.Data.DataDefs
 import           Blockchain.ExtWord
 import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
@@ -83,6 +84,11 @@ connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 privateKey::Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
 
+runUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
+runUDPServer cxt myPriv socket = do
+  runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
+  return ()
+
 main :: IO ()
 main = do
 {-
@@ -120,21 +126,29 @@ main = do
 
   putStrLn $ "my pubkey is: " ++ (show $ B16.encode $ B.pack $ pointToBytes myPublic)
   putStrLn $ "as a point:   " ++ (show myPublic)
-  
-  cxt <- runResourceT $ initContextLite connStr
-  tCxt <- newTVarIO cxt
-  createTrigger (notifHandler cxt)
 
-  _ <- async $ S.withSocketsDo $ bracket connectMe S.sClose (udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) tCxt )
 
   _ <- runResourceT $ do
-   
+  
+    cxt <- initContextLite connStr
+    liftIO $ createTrigger (notifHandler cxt)
+
+    liftIO $ putStrLn $ "context: " ++ (show cxt)
+    liftIO $ async $ S.withSocketsDo $ bracket connectMe S.sClose (runUDPServer cxt myPriv)
+
+    liftIO $ putStrLn $ "listening over UDP, proceeding to TCP"    
+
     lift $ runTCPServer (serverSettings defaultListenPort "*") $ \app -> do
-      curr <- readTVarIO tCxt
-      putStrLn $ "current context: " ++ (show curr)
-      
+      liftIO $ putStrLn $ "in TCP server"    
+
+      peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
+      liftIO $ putStrLn $ "unwrapped peer: " ++ (show peer)
+      let unwrappedPeer = case peer of 
+                         Nothing -> undefined
+                         Just peer' -> peer'
+                          
       (_,cState) <-
-        appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) ((peers curr) Map.! (sockAddrToIP $ appSockAddr app) ) ) `fuseUpstream` appSink app
+        appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) (pPeerPubkey unwrappedPeer)) `fuseUpstream` appSink app
 
       runEthCryptMLite cxt cState $ do
         let rSource = appSource app

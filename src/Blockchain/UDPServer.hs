@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 
 module Blockchain.UDPServer (
       connectMe,
@@ -13,22 +14,25 @@ import           Data.Conduit.TMChan
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Control.Monad
-import           Control.Concurrent.Async 
 import           Control.Exception
 import qualified Data.Binary as BN
 
 
 import           Data.Time.Clock.POSIX
+import           Data.Time.Clock
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
+import qualified Data.Text as T
 
 import           Blockchain.UDP
 import           Blockchain.SHA
 import           Blockchain.Data.RLP
+import           Blockchain.Data.DataDefs
+import           Blockchain.DB.SQLDB
 import           Blockchain.ExtWord
 import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
-import           Blockchain.ContextLite
+import           Blockchain.ContextLite (addPeer)
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.DBM
@@ -37,13 +41,14 @@ import qualified Data.ByteString.Lazy as BL
 
 import           Data.Maybe
 import           Control.Monad.State
+import           Control.Monad.Trans.Resource
+import           Control.Monad
 import           Prelude 
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
 import qualified Crypto.Hash.SHA3 as SHA3
 
 import           Blockchain.P2PUtil
-
 
 
 portS :: String
@@ -57,15 +62,17 @@ connectMe = do
   sock <- S.socket (S.addrFamily serveraddr) S.Datagram S.defaultProtocol
   S.bindSocket sock (S.addrAddress serveraddr) >> return sock
 
-udpHandshakeServer :: H.PrvKey -> TContext -> S.Socket  -> IO ()
-udpHandshakeServer prv cxt conn = do
-   (msg,addr) <- NB.recvFrom conn 1280
+udpHandshakeServer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m, MonadIO m) => H.PrvKey 
+                    -> S.Socket->m()
+udpHandshakeServer prv conn = do
+   (msg,addr) <- liftIO $ NB.recvFrom conn 1280  -- liftIO unavoidable?
 
-   putStrLn $ "from addr: " ++ show addr
+   liftIO $ putStrLn $ "from addr: " ++ show addr
    let ip = sockAddrToIP addr
 
-
-   putStrLn $ "connection from ip: " ++ ip
+   db <- getSQLDB
+   liftIO $ putStrLn $ "db inside udpHandshakeServer: " ++ (show db)
+   liftIO $ putStrLn $ "connection from ip: " ++ ip
    
    let r = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ msg
        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 64 msg
@@ -81,10 +88,10 @@ udpHandshakeServer prv cxt conn = do
        otherPubkey = fromMaybe (error "malformed signature in udpHandshakeServer") $ getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
 
-   putStrLn $ "other pubkey: " ++ (show $ B16.encode $ B.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
-   putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
+   liftIO $ putStrLn $ "other pubkey: " ++ (show $ B16.encode $ B.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
+   liftIO $ putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
    
-   time <-  round `fmap` getPOSIXTime
+   time <- liftIO $ round `fmap` getPOSIXTime
 
    let (theType, theRLP) = ndPacketToRLP $
                                 (Pong (Endpoint "127.0.0.1" 30303 30303) 4 (time+50):: NodeDiscoveryPacket)
@@ -99,14 +106,26 @@ udpHandshakeServer prv cxt conn = do
        s = H.sigS signature
        theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
        theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
-
-   cxt' <- readTVarIO cxt
-   let prevPeers = peers cxt'
-       
-   atomically $ writeTVar cxt (cxt'{peers=(Map.insert ip (hPubKeyToPubKey otherPubkey) prevPeers)} )
-
-   putStrLn $ "about to send PONG"
-   _ <- NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
    
-   udpHandshakeServer prv cxt conn
+   curTime <- liftIO $ getCurrentTime
+ 
+   let peer = PPeer {
+              pPeerPubkey = hPubKeyToPubKey $ otherPubkey,
+              pPeerIp = T.pack ip,
+              pPeerPort = 30305, -- change 
+              pPeerNumSessions = 0,
+              pPeerLastTotalDifficulty = 0,
+              pPeerLastMsg  = T.pack "msg",
+              pPeerLastMsgTime = curTime,
+              pPeerLastBestBlockHash = SHA 0,
+              pPeerVersion = T.pack "61" -- fix
+            }
+ 
+   liftIO $ putStrLn $ "about to add peer to database: " ++ (show peer)
+   _ <- addPeer $ peer
+
+   liftIO $ putStrLn $ "about to send PONG"
+   _ <- liftIO $ NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
+   
+   udpHandshakeServer prv conn
    return () 
