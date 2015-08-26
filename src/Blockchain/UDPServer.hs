@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Blockchain.UDPServer (
+      runEthUDPServer,
       connectMe,
       udpHandshakeServer,
       portS
@@ -32,7 +33,7 @@ import           Blockchain.DB.SQLDB
 import           Blockchain.ExtWord
 import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
-import           Blockchain.ContextLite (addPeer)
+import           Blockchain.ContextLite 
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.DBM
@@ -47,12 +48,19 @@ import           Prelude
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
 import qualified Crypto.Hash.SHA3 as SHA3
+import           Crypto.PubKey.ECC.DH
+import           Crypto.Types.PubKey.ECC
 
 import           Blockchain.P2PUtil
 
 
 portS :: String
 portS = "30305"
+
+runEthUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
+runEthUDPServer cxt myPriv socket = do
+  runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
+  return ()
 
 connectMe :: IO S.Socket
 connectMe = do

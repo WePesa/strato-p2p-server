@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleContexts           #-}
 
 module Blockchain.TCPServer (
---  runEthCryptMLite,
+  runEthServer,
   tcpHandshakeServer  
   ) where
 
@@ -15,6 +18,7 @@ import           Network.Haskoin.Crypto
 import           Data.Conduit.TMChan
 import           Control.Concurrent.STM
 import qualified Data.Map as Map
+import           Control.Applicative
 import           Control.Monad
 import           Control.Exception
 import qualified Data.Binary as BN
@@ -34,6 +38,8 @@ import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.DBM
+import           Blockchain.UDPServer
+import           Blockchain.TriggerNotify
 
 import qualified Data.ByteString.Lazy as BL
 
@@ -42,7 +48,6 @@ import           Control.Monad.State
 import           Prelude 
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
---import           System.Entropy
 
 import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
@@ -52,16 +57,17 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import           Crypto.Cipher.AES
 
 import           Data.Bits
+import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Data.List.Split
 import           Blockchain.UDP
+import           Blockchain.Data.DataDefs
 import           Control.Monad.State
 import           Prelude 
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
---import           System.Entropy
 
 import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
@@ -70,12 +76,44 @@ import qualified Crypto.Hash.SHA3 as SHA3
 
 import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
+import           Control.Concurrent.Async.Lifted
 
 
-add :: B.ByteString->B.ByteString->B.ByteString
+add :: B.ByteString
+    -> B.ByteString
+    -> B.ByteString
 add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
 add _ _ = error "add called with ByteString of length not 32"
 
+runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m) 
+             => SQL.ConnectionString     
+             -> PrivateNumber
+             -> Int
+             -> m ()
+runEthServer connStr myPriv listenPort = do  
+    cxt <- initContextLite connStr
+
+    liftIO $ createTrigger (notifHandler cxt)
+    liftIO $ async $ S.withSocketsDo $ bracket connectMe S.sClose (runEthUDPServer cxt myPriv)
+
+    liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
+      peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
+      let unwrappedPeer = case (SQL.entityVal <$> peer) of 
+                            Nothing -> undefined
+                            Just peer' -> peer'
+                          
+      (_,cState) <-
+        appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) (pPeerPubkey unwrappedPeer)) `fuseUpstream` appSink app
+
+      runEthCryptMLite cxt cState $ do
+        let rSource = appSource app
+            nSource = notificationSource (notifHandler cxt)
+                      =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)
+
+        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+
+
+        runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app
 
 tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv otherPoint = go
