@@ -114,20 +114,26 @@ initContextLite str = do
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
 addPeer peer = do
   db <- getSQLDB
+  maybePeer <- getPeerByIP (T.unpack $ pPeerIp peer)
   runResourceT $
-    SQL.runSqlPool actions db
-  where actions = do
-          peerid <- SQL.insert $ peer        
-          return peerid
+    SQL.runSqlPool (actions maybePeer) db
+  where actions mp = case mp of
+            Nothing -> do
+              peerid <- SQL.insert $ peer        
+              return peerid
+  
+            Just peer'-> do 
+              SQL.update (SQL.entityKey peer') [PPeerPubkey SQL.=.(pPeerPubkey peer)]  
+              return (SQL.entityKey peer')
 
-getPeerByIP :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>String->m (Maybe PPeer)
+getPeerByIP :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>String->m (Maybe (SQL.Entity PPeer))
 getPeerByIP ip = do
   db <- getSQLDB
   entPeer <- runResourceT $ SQL.runSqlPool actions db
   
   case entPeer of 
     [] -> return Nothing
-    lst -> return $ Just . SQL.entityVal . head $ lst
+    lst -> return $ Just . head $ lst
 
   where actions = SQL.selectList [ PPeerIp SQL.==. (T.pack ip) ] []
 

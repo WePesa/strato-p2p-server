@@ -47,6 +47,7 @@ import           Blockchain.Handshake
 import           Blockchain.DBM
 
 import qualified Data.ByteString.Lazy as BL
+import qualified Database.Persist.Postgresql as SQL
 
 import           Data.Maybe
 import           Control.Monad.State
@@ -143,9 +144,9 @@ main = do
 
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       liftIO $ putStrLn $ "unwrapped peer: " ++ (show peer)
-      let unwrappedPeer = case peer of 
-                         Nothing -> undefined
-                         Just peer' -> peer'
+      let unwrappedPeer = case (SQL.entityVal <$> peer) of 
+                            Nothing -> undefined
+                            Just peer' -> peer'
                           
       (_,cState) <-
         appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) (pPeerPubkey unwrappedPeer)) `fuseUpstream` appSink app
