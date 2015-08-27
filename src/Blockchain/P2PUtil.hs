@@ -4,7 +4,8 @@ module Blockchain.P2PUtil (
   hPubKeyToPubKey,
   ecdsaSign,
   intToBytes,
-  sockAddrToIP
+  sockAddrToIP,
+  add
   ) where
 
 import           Conduit
@@ -59,6 +60,12 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Data.List.Split
+
+add :: B.ByteString
+    -> B.ByteString
+    -> B.ByteString
+add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
+add _ _ = error "add called with ByteString of length not 32"
                                      
 theCurve :: Curve
 theCurve = getCurveByName SEC_p256k1

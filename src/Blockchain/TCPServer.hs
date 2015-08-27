@@ -78,13 +78,6 @@ import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
 import           Control.Concurrent.Async.Lifted
 
-
-add :: B.ByteString
-    -> B.ByteString
-    -> B.ByteString
-add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
-add _ _ = error "add called with ByteString of length not 32"
-
 runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m) 
              => SQL.ConnectionString     
              -> PrivateNumber

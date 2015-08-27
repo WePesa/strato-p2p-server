@@ -66,7 +66,7 @@ data EthCryptStateLite =
     egressKey::B.ByteString,
     ingressKey::B.ByteString,
     peerId::Point
-    }
+    } 
 
 type EthCryptMLite a = StateT EthCryptStateLite a
 

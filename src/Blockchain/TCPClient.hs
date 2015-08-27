@@ -91,9 +91,41 @@ runEthClient connStr myPriv ip port = do
           appSource server $$+ (tcpHandshakeClient (fromIntegral myPriv) serverPubKey (B.pack $ word256ToBytes myNonce)) `fuseUpstream` appSink server
     return ()
  
-tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO ()
-tcpHandshakeClient prv otherPubKey myNonce = do
-  bytes <- lift $ getHandshakeBytes prv otherPubKey myNonce
-  yield bytes
-  response <- await
-  liftIO $ putStrLn $ "in tcpHandshakeClient, got: " ++ (show response)
+tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
+tcpHandshakeClient myPriv otherPubKey myNonce = do
+  handshakeInitBytes <- lift $ getHandshakeBytes myPriv otherPubKey myNonce
+  yield handshakeInitBytes
+  
+  handshakeReplyBytes <- CBN.take 210
+  let replyECEISMsg = (BN.decode $ handshakeReplyBytes :: ECEISMessage)
+
+  when (BL.length handshakeReplyBytes /= 210) $ error "handshake reply didn't contain enough bytes"
+  
+  let ackMsg = bytesToAckMsg $ B.unpack $ decryptECEIS myPriv replyECEISMsg
+
+  let m_originated = False 
+      otherNonce = B.pack $ word256ToBytes $ ackNonce ackMsg
+
+      SharedKey shared' = getShared theCurve myPriv (ackEphemeralPubKey ackMsg)
+      shared = B.pack $ intToBytes shared'
+
+      frameDecKey = myNonce `add` otherNonce `add` shared `add` shared
+      macEncKey = frameDecKey `add` shared
+
+      ingressCipher = if m_originated then handshakeInitBytes else (BL.toStrict handshakeReplyBytes)
+      egressCipher = if m_originated then (BL.toStrict handshakeReplyBytes) else handshakeInitBytes
+
+  let cState =
+        EthCryptStateLite {
+          peerId = calculatePublic theCurve myPriv,
+          encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+          decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+          egressMAC=SHA3.update (SHA3.init 256) $
+                    (macEncKey `bXor` otherNonce) `B.append` egressCipher,
+          egressKey=macEncKey,
+          ingressMAC=SHA3.update (SHA3.init 256) $ 
+                     (macEncKey `bXor` myNonce) `B.append` ingressCipher,
+          ingressKey=macEncKey
+          }
+  liftIO $ putStrLn $ "handshake negotiated: " ++ (show (peerId cState))
+  return cState
