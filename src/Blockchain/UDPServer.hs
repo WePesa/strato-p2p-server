@@ -74,12 +74,9 @@ udpHandshakeServer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, Monad
 udpHandshakeServer prv conn = do
    (msg,addr) <- liftIO $ NB.recvFrom conn 1280  -- liftIO unavoidable?
 
-   liftIO $ putStrLn $ "from addr: " ++ show addr
    let ip = sockAddrToIP addr
 
    db <- getSQLDB
-   liftIO $ putStrLn $ "db inside udpHandshakeServer: " ++ (show db)
-   liftIO $ putStrLn $ "connection from ip: " ++ ip
    
    let r = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ msg
        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 64 msg
@@ -95,8 +92,6 @@ udpHandshakeServer prv conn = do
        otherPubkey = fromMaybe (error "malformed signature in udpHandshakeServer") $ getPubKeyFromSignature signature messageHash  
        yIsOdd = v == 1
 
-   liftIO $ putStrLn $ "other pubkey: " ++ (show $ B16.encode $ B.pack $ pointToBytes $ hPubKeyToPubKey $ otherPubkey)
-   liftIO $ putStrLn $ "other pubkey as point: " ++ (show $ hPubKeyToPubKey $ otherPubkey)
    
    time <- liftIO $ round `fmap` getPOSIXTime
 
@@ -128,10 +123,7 @@ udpHandshakeServer prv conn = do
               pPeerVersion = T.pack "61" -- fix
             }
  
-   liftIO $ putStrLn $ "about to add peer to database: " ++ (show peer)
    _ <- addPeer $ peer
-
-   liftIO $ putStrLn $ "about to send PONG"
    _ <- liftIO $ NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
    
    udpHandshakeServer prv conn

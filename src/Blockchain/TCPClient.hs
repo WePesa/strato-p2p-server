@@ -1,5 +1,7 @@
+{-# LANGUAGE FlexibleContexts #-}
 
 module Blockchain.TCPClient (
+  runEthClient,
   tcpHandshakeClient
   ) where
 
@@ -51,6 +53,7 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import           Crypto.Cipher.AES
 
 import           Data.Bits
+import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
@@ -68,7 +71,18 @@ import qualified Crypto.Hash.SHA3 as SHA3
 
 import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
+import           Control.Concurrent.Async.Lifted
 
+
+runEthClient :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
+             => SQL.ConnectionString
+             -> PrivateNumber
+             -> String
+             -> Int
+             -> m ()
+runEthClient connStr myPriv ip port = do
+  serverPubKey <- liftIO $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
+  liftIO $ putStrLn $ "server public key is : " ++ (show serverPubKey)       
 
 tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM () B.ByteString IO ()
 tcpHandshakeClient prv otherPubKey myNonce = do

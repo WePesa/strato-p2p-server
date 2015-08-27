@@ -115,7 +115,9 @@ runEthServer connStr myPriv listenPort = do
 
         runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app
 
-tcpHandshakeServer :: PrivateNumber -> Point -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
+tcpHandshakeServer :: PrivateNumber 
+                   -> Point 
+                   -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeServer prv otherPoint = go
   where
   go = do
@@ -123,10 +125,7 @@ tcpHandshakeServer prv otherPoint = go
     
     let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
         eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
-
-    let iv = B.replicate 16 0
-            
-    lift $ putStrLn $ "received from pubkey: " ++ (show $ otherPoint)
+        iv = B.replicate 16 0     
     
     let SharedKey sharedKey = getShared theCurve prv otherPoint
         otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
@@ -137,38 +136,30 @@ tcpHandshakeServer prv otherPoint = go
         yIsOdd = v == 1
 
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
-
-
-        otherEphemeral = hPubKeyToPubKey $ fromMaybe (error "malformed signature in tcpHandshakeServer") $ getPubKeyFromSignature extSig msg
+        otherEphemeral = hPubKeyToPubKey $ 
+                            fromMaybe (error "malformed signature in tcpHandshakeServer") $ 
+                            getPubKeyFromSignature extSig msg
 
 
     entropyPool <- liftIO createEntropyPool
     let g = cprgCreate entropyPool :: SystemRNG
         (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
-
-    let myEphemeral = calculatePublic theCurve myPriv
-        
-    let myNonce = 25 :: Word256
-
-    let ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False } 
-
-    let eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
-    let eceisMsgOBytes = BL.toStrict $ BN.encode eceisMsgOutgoing
+        myEphemeral = calculatePublic theCurve myPriv
+        myNonce = 25 :: Word256 
+        ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False } 
+        eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
+        eceisMsgOBytes = BL.toStrict $ BN.encode eceisMsgOutgoing
             
     yield $ eceisMsgOBytes
 
     let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
         ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
-  --  lift $ putStrLn $ "otherEphemeral as a point: " ++ (show $ otherEphemeral)
-  --  lift $ putStrLn $ "otherEphemeral bytes      : " ++ (show $ pointToBytes otherEphemeral)
-  --  lift $ putStrLn $ "ephemeral shared secret: " ++ (show $ intToBytes ephemeralSharedSecret)
-
-    let myNonceBS = B.pack $ word256ToBytes myNonce
-
-        -- frameDecKey = otherNonce `add` myNonceBS `add` shared2' `add` shared2'
-        -- macEncKey = frameDecKey `add` shared2'
-
-        frameDecKey = otherNonce `add` myNonceBS `add` (B.pack ephemeralSharedSecretBytes) `add` (B.pack ephemeralSharedSecretBytes)
+  
+        myNonceBS = B.pack $ word256ToBytes myNonce
+        frameDecKey = otherNonce `add` 
+                        myNonceBS `add` 
+                        (B.pack ephemeralSharedSecretBytes) `add` 
+                        (B.pack ephemeralSharedSecretBytes)
         macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
         
     let cState =

@@ -53,14 +53,14 @@ import Data.Bits
 
 import qualified Database.Esqueleto as E
 
-
 ethVersion :: Int
 ethVersion = 60
 
 data RowNotification = TransactionNotification Int | BlockNotification Int
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
-respondMsgConduit :: Message -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+respondMsgConduit :: Message 
+                  -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
    cxt' <- lift $ lift $ get
    
@@ -68,7 +68,6 @@ respondMsgConduit m = do
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
---         liftIO $ putStrLn $ "replying to hello"
          sendMsgConduit Hello {
                              version = 4,
                              clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
@@ -79,16 +78,13 @@ respondMsgConduit m = do
        Ping -> do
          sendMsgConduit Pong
        GetPeers -> do
---         liftIO $ putStrLn $ "peer asked for peers"
          sendMsgConduit $ Peers []
          sendMsgConduit GetPeers      
        BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
        GetBlockHashes h maxBlocks -> do
---         liftIO $ putStrLn $ "peer requested: " ++ (show maxBlocks) ++  " block hashes, starting with: " ++ (show h)
          hashes <- lift $ lift $ getBlockHashes h maxBlocks
          sendMsgConduit $ BlockHashes hashes 
        GetBlocks shaList -> do
---         liftIO $ putStrLn $ "peer requested blocks"
          blks <- lift $ lift $ handleBlockRequest shaList
          sendMsgConduit $ Blocks blks
        Blocks blocks -> liftIO $ putStrLn "got new blocks"
@@ -110,7 +106,6 @@ respondMsgConduit m = do
        
 --handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 handleMsgConduit = awaitForever $ \mn -> do
-  liftIO $ putStrLn "onion"
   case mn of
     (EthMessage m) -> respondMsgConduit m
     (Notif (TransactionNotification n)) -> do
@@ -119,7 +114,9 @@ handleMsgConduit = awaitForever $ \mn -> do
          sendMsgConduit $ Transactions (map rawTX2TX tx)
     _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
     
-sendMsgConduit :: MonadIO m => Message -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
+sendMsgConduit :: MonadIO m 
+               => Message 
+               -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
 sendMsgConduit msg = do
  
   let (pType, pData) = wireMessage2Obj msg
@@ -139,10 +136,7 @@ sendMsgConduit msg = do
   frameCipher <- lift $ lift $ encrypt (bytes `B.append` B.replicate frameBuffSize 0)
   frameMAC <- lift $ lift $ updateEgressMac =<< rawUpdateEgressMac frameCipher
 
-
-  liftIO $ putStrLn "before yield"
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
-  liftIO $ putStrLn "after yield"
   
 
 recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
@@ -150,20 +144,12 @@ recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) 
 recvMsgConduit = do
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
-
---  liftIO $ putStrLn $ "headCipher: " ++ (show $ B.unpack $ BL.toStrict headCipher)
---  liftIO $ putStrLn $ "headMAC:    " ++ (show $ B.unpack $ BL.toStrict headMAC)
-  
   expectedHeadMAC <- lift $ lift $ updateIngressMac $ (BL.toStrict headCipher)
-
---  liftIO $ putStrLn $ "expected: " ++ (show $ B.unpack expectedHeadMAC)
   
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error ("oops, head mac isn't what I expected, headCipher: " ++ (show headCipher))
 
   header <- lift $ lift $ decrypt (BL.toStrict headCipher)
 
---  liftIO $ putStrLn $ "header: " ++ (show $ B.unpack header)
-  
   let frameSize = 
         (fromIntegral (header `B.index` 0) `shiftL` 16) +
         (fromIntegral (header `B.index` 1) `shiftL` 8) +
@@ -179,8 +165,6 @@ recvMsgConduit = do
   when (expectedFrameMAC /= (BL.toStrict frameMAC)) $ error "oops, frame mac isn't what I expected"
   fullFrame <- lift $ lift $ decrypt (BL.toStrict frameCipher)
 
---  liftIO $ putStrLn $ "fullFrame: " ++ (show fullFrame)
-  
   let frameData = B.take frameSize fullFrame
       packetType = fromInteger $ rlpDecode $ rlpDeserialize $ B.take 1 frameData
       packetData = rlpDeserialize $ B.drop 1 frameData
@@ -190,13 +174,17 @@ recvMsgConduit = do
   liftIO $ putStrLn $ "just yielded: " ++ (show $ format $ (obj2WireMessage packetType packetData))
 
       
-bXor::B.ByteString->B.ByteString->B.ByteString
+bXor :: B.ByteString
+     -> B.ByteString
+     -> B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 
 bXor x y = error $
            "bXor called with two ByteStrings of different length: length string1 = " ++
            show (B.length x) ++ ", length string2 = " ++ show (B.length y)
 
-encrypt::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+encrypt :: MonadIO m
+        => B.ByteString
+        -> EthCryptMLite m B.ByteString
 encrypt input = do
   cState <- get
   let aesState = encryptState cState
@@ -204,7 +192,9 @@ encrypt input = do
   put cState{encryptState=aesState'}
   return output
 
-decrypt::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+decrypt :: MonadIO m
+        => B.ByteString 
+        -> EthCryptMLite m B.ByteString
 decrypt input = do
   cState <- get
   let aesState = decryptState cState
@@ -212,13 +202,16 @@ decrypt input = do
   put cState{decryptState=aesState'}
   return output
 
-getEgressMac::MonadIO m=>EthCryptMLite m B.ByteString
+getEgressMac :: MonadIO m
+             => EthCryptMLite m B.ByteString
 getEgressMac = do
   cState <- get
   let mac = egressMAC cState
   return $ B.take 16 $ SHA3.finalize mac
 
-rawUpdateEgressMac::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+rawUpdateEgressMac :: MonadIO m
+                   => B.ByteString
+                   -> EthCryptMLite m B.ByteString
 rawUpdateEgressMac value = do
   cState <- get
   let mac = egressMAC cState
@@ -226,20 +219,25 @@ rawUpdateEgressMac value = do
   put cState{egressMAC=mac'}
   return $ B.take 16 $ SHA3.finalize mac'
 
-updateEgressMac::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+updateEgressMac :: MonadIO m 
+                => B.ByteString
+                -> EthCryptMLite m B.ByteString
 updateEgressMac value = do
   cState <- get
   let mac = egressMAC cState
   rawUpdateEgressMac $
     value `bXor` (encryptECB (initAES $ egressKey cState) (B.take 16 $ SHA3.finalize mac))
 
-getIngressMac::MonadIO m=>EthCryptMLite m B.ByteString
+getIngressMac :: MonadIO m 
+              => EthCryptMLite m B.ByteString
 getIngressMac = do
   cState <- get
   let mac = ingressMAC cState
   return $ B.take 16 $ SHA3.finalize mac
 
-rawUpdateIngressMac::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+rawUpdateIngressMac :: MonadIO m
+                    => B.ByteString
+                    -> EthCryptMLite m B.ByteString
 rawUpdateIngressMac value = do
   cState <- get
   let mac = ingressMAC cState
@@ -247,7 +245,9 @@ rawUpdateIngressMac value = do
   put cState{ingressMAC=mac'}
   return $ B.take 16 $ SHA3.finalize mac'
 
-updateIngressMac::MonadIO m=>B.ByteString->EthCryptMLite m B.ByteString
+updateIngressMac :: MonadIO m
+                 => B.ByteString
+                 -> EthCryptMLite m B.ByteString
 updateIngressMac value = do
   cState <- get
   let mac = ingressMAC cState

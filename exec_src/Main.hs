@@ -73,6 +73,7 @@ import           HFlags
 
 import           Blockchain.PeerUrls
 import           Blockchain.TCPServer
+import           Blockchain.TCPClient
 import           Blockchain.UDPServer
 import           Blockchain.P2PUtil
 import           Blockchain.TriggerNotify
@@ -84,7 +85,8 @@ connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 privateKey :: Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
 
-defineFlag "a:address" ("127.0.0.1:30303" :: String) "Connect to server at address:(port)"
+defineFlag "a:address" ("127.0.0.1" :: String) "Connect to server at address"
+defineFlag "p:port" (30303 :: Int) "Connect on port"
 defineFlag "l:listen" (30305 :: Int) "Listen on port"
 defineFlag "name" ("Indiana Jones" :: String) "Who to greet."
 
@@ -93,25 +95,15 @@ main = do
   _ <- $initHFlags "Ethereum p2p"
   
   putStrLn $ "connect address: " ++ (flags_address)
+  putStrLn $ "connect port:    " ++ (show flags_port)
   putStrLn $ "listen port:     " ++ (show flags_listen)
 
   let myPriv = privateKey
-{-
-  serverPubKeyAsync <- async $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
-  maybeKey <- waitCatch serverPubKeyAsync
-
-  putStrLn $ "server public key is : " ++ (show maybeKey)
--}
-
-{-
-  serverPubKey <- getServerPubKey (H.PrvKey $ fromIntegral myPriv) ipAddress thePort'
-  putStrLn $ "server public key is : " ++ (show $ B16.encode $ B.pack $ pointToBytes serverPubKey)
--}
-
-  let myPublic = calculatePublic theCurve (fromIntegral myPriv)
-
-  _ <- runResourceT $ runEthServer connStr myPriv flags_listen
-      
+      myPublic = calculatePublic theCurve (fromIntegral myPriv)
+  
+  _ <- runResourceT $ do
+          async $ (runEthClient connStr myPriv flags_address flags_port)
+          (runEthServer connStr myPriv flags_listen)
 
   return ()
   
