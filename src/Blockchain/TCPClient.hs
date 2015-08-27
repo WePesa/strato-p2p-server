@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Blockchain.TCPClient (
   runEthClient,
@@ -73,6 +74,7 @@ import           Crypto.Cipher.AES
 import           Blockchain.P2PUtil
 import           Control.Concurrent.Async.Lifted
 
+myNonce = 25 :: Word256
 
 runEthClient :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
              => SQL.ConnectionString
@@ -84,7 +86,14 @@ runEthClient connStr myPriv ip port = do
   serverPubKey <- liftIO $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
   liftIO $ putStrLn $ "server public key is : " ++ (show serverPubKey)       
 
-tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM () B.ByteString IO ()
+  liftIO $ runTCPClient (clientSettings port (BC.pack ip)) $ \server -> do
+    (_,_) <-
+          appSource server $$+ (tcpHandshakeClient (fromIntegral myPriv) serverPubKey (B.pack $ word256ToBytes myNonce)) `fuseUpstream` appSink server
+    return ()
+ 
+tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO ()
 tcpHandshakeClient prv otherPubKey myNonce = do
   bytes <- lift $ getHandshakeBytes prv otherPubKey myNonce
   yield bytes
+  response <- await
+  liftIO $ putStrLn $ "in tcpHandshakeClient, got: " ++ (show response)
