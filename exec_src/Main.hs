@@ -69,6 +69,8 @@ import           Data.Bits
 import qualified Data.ByteString.Char8 as BC
 import           Blockchain.UDP
 import           System.Environment
+import           HFlags
+
 import           Blockchain.PeerUrls
 import           Blockchain.TCPServer
 import           Blockchain.UDPServer
@@ -76,28 +78,22 @@ import           Blockchain.P2PUtil
 import           Blockchain.TriggerNotify
 import           Control.Applicative
 
-defaultListenPort :: Int
-defaultListenPort = 30305
-
-connStr::BC.ByteString
+connStr :: BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
-privateKey::Integer
+privateKey :: Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
+
+defineFlag "a:address" ("127.0.0.1:30303" :: String) "Connect to server at address:(port)"
+defineFlag "l:listen" (30305 :: Int) "Listen on port"
+defineFlag "name" ("Indiana Jones" :: String) "Who to greet."
 
 main :: IO ()
 main = do
-  args <- getArgs
-
-  let (ipAddress, thePort') =
-        case args of
-          [] -> ipAddresses !! 1 --default server                                                                  
-          [x] -> ipAddresses !! read x
-          ["-a", address] -> (address, 30303)
-          [x, prt] -> (fst (ipAddresses !! read x), fromIntegral $ read prt)
-          ["-a", address, prt] -> (address, fromIntegral $ read prt)
-          _ -> error "usage: p2p-server [servernum] [port]"
-
+  _ <- $initHFlags "Ethereum p2p"
+  
+  putStrLn $ "connect address: " ++ (flags_address)
+  putStrLn $ "listen port:     " ++ (show flags_listen)
 
   let myPriv = privateKey
 {-
@@ -114,7 +110,7 @@ main = do
 
   let myPublic = calculatePublic theCurve (fromIntegral myPriv)
 
-  _ <- runResourceT $ runEthServer connStr myPriv defaultListenPort
+  _ <- runResourceT $ runEthServer connStr myPriv flags_listen
       
 
   return ()

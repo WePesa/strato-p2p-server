@@ -94,7 +94,7 @@ runEthServer connStr myPriv listenPort = do
     cxt <- initContextLite connStr
 
     liftIO $ createTrigger (notifHandler cxt)
-    liftIO $ async $ S.withSocketsDo $ bracket connectMe S.sClose (runEthUDPServer cxt myPriv)
+    liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
 
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)

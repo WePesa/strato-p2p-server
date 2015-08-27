@@ -3,8 +3,7 @@
 module Blockchain.UDPServer (
       runEthUDPServer,
       connectMe,
-      udpHandshakeServer,
-      portS
+      udpHandshakeServer
      ) where
 
 import qualified Network.Socket as S
@@ -54,24 +53,24 @@ import           Crypto.Types.PubKey.ECC
 import           Blockchain.P2PUtil
 
 
-portS :: String
-portS = "30305"
-
 runEthUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
 runEthUDPServer cxt myPriv socket = do
   runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
   return ()
 
-connectMe :: IO S.Socket
-connectMe = do
+connectMe :: Int 
+          -> IO S.Socket
+connectMe port = do
   (serveraddr:_) <- S.getAddrInfo
                       (Just (S.defaultHints {S.addrFlags = [S.AI_PASSIVE]}))
-                      Nothing (Just portS)
+                      Nothing (Just (show port))
   sock <- S.socket (S.addrFamily serveraddr) S.Datagram S.defaultProtocol
   S.bindSocket sock (S.addrAddress serveraddr) >> return sock
 
-udpHandshakeServer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m, MonadIO m) => H.PrvKey 
-                    -> S.Socket->m()
+udpHandshakeServer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m, MonadIO m) 
+                   => H.PrvKey 
+                   -> S.Socket
+                   -> m ()
 udpHandshakeServer prv conn = do
    (msg,addr) <- liftIO $ NB.recvFrom conn 1280  -- liftIO unavoidable?
 
