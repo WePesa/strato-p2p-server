@@ -54,7 +54,7 @@ import Data.Bits
 import qualified Database.Esqueleto as E
 
 ethVersion :: Int
-ethVersion = 60
+ethVersion = 61
 
 data RowNotification = TransactionNotification Int | BlockNotification Int
 data MessageOrNotification = EthMessage Message | Notif RowNotification

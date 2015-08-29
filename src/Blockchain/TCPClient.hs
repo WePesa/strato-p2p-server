@@ -36,6 +36,7 @@ import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.DBM
+import           Blockchain.TriggerNotify
 
 import qualified Data.ByteString.Lazy as BL
 
@@ -86,10 +87,23 @@ runEthClient connStr myPriv ip port = do
   serverPubKey <- liftIO $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
   liftIO $ putStrLn $ "server public key is : " ++ (show serverPubKey)       
 
+  cxt <- initContextLite connStr
+             
   liftIO $ runTCPClient (clientSettings port (BC.pack ip)) $ \server -> do
-    (_,_) <-
+    (_,cState) <-
           appSource server $$+ (tcpHandshakeClient (fromIntegral myPriv) serverPubKey (B.pack $ word256ToBytes myNonce)) `fuseUpstream` appSink server
-    return ()
+
+
+    runEthCryptMLite cxt cState $ do
+      let rSource = appSource server
+          nSource = notificationSource (notifHandler cxt)
+                    =$= CL.map (Notif . TransactionNotification .  parseNotifPayload . BC.unpack . notificationData)
+
+      mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+
+
+      runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink server
+
  
 tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeClient myPriv otherPubKey myNonce = do
@@ -128,4 +142,6 @@ tcpHandshakeClient myPriv otherPubKey myNonce = do
           ingressKey=macEncKey
           }
   liftIO $ putStrLn $ "handshake negotiated: " ++ (show (peerId cState))
+
+  
   return cState

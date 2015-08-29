@@ -72,7 +72,6 @@ type EthCryptMLite a = StateT EthCryptStateLite a
 
 data ContextLite =
   ContextLite {
-    peers:: Map.Map String Point, 
     liteSQLDB::SQLDB,
     notifHandler::PS.Connection,
     debugEnabled::Bool
@@ -105,7 +104,6 @@ initContextLite str = do
            }
   dbs <- openDBsLite str
   return ContextLite {
-                    peers = Map.fromList $ [],
                     liteSQLDB = sqlDBLite dbs,                    
                     notifHandler=notif,
                     debugEnabled = False

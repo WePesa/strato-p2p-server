@@ -29,7 +29,6 @@ import           Control.Concurrent.Async.Lifted
 import           Control.Exception
 import qualified Data.Binary as BN
 
-
 import           Data.Time.Clock.POSIX
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
@@ -54,7 +53,6 @@ import           Control.Monad.State
 import           Prelude 
 import           Data.Word
 import qualified Network.Haskoin.Internals as H
---import           System.Entropy
 
 import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
