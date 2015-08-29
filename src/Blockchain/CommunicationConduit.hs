@@ -64,7 +64,6 @@ respondMsgConduit :: Message
 respondMsgConduit m = do
    cxt' <- lift $ lift $ get
    
-   liftIO $ putStrLn $ "in respondMsgConduit, received " ++ (show $ format m) ++ " from " ++ (show (peerId cxt'))
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
@@ -101,6 +100,8 @@ respondMsgConduit m = do
                             }
        Transactions lst ->
          sendMsgConduit (Transactions [])
+       Disconnect reason ->
+         liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
        GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
        
@@ -171,7 +172,7 @@ recvMsgConduit = do
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
 
-  liftIO $ putStrLn $ "just yielded: " ++ (show $ format $ (obj2WireMessage packetType packetData))
+  liftIO $ putStrLn $ "just yielded (received message): " ++ (show $ format $ (obj2WireMessage packetType packetData))
 
       
 bXor :: B.ByteString
