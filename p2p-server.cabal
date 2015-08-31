@@ -61,7 +61,8 @@ executable p2p-server
                        postgresql-simple,
                        split,
                        stm-chans,
-                       hflags
+                       hflags,
+                       lifted-base
 
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
@@ -112,7 +113,8 @@ library
                        postgresql-simple,
                        split,
                        stm-chans,
-                       hflags
+                       hflags,
+                       lifted-base
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,

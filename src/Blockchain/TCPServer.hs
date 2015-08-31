@@ -106,8 +106,12 @@ runEthServer connStr myPriv listenPort = do
         mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
-        runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink app
+        runResourceT $ do 
+          liftIO $ putStrLn "server session starting"
+          (mSource' $$ handleMsgConduit =$= appSink app)
+          liftIO $ putStrLn "server session ended"
 
+ 
 tcpHandshakeServer :: PrivateNumber 
                    -> Point 
                    -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
@@ -165,7 +169,9 @@ tcpHandshakeServer prv otherPoint = go
             ingressMAC=SHA3.update (SHA3.init 256) $ 
                      (macEncKey `bXor` myNonceBS) `B.append` (BL.toStrict hsBytes),
             ingressKey=macEncKey,
-            peerId = calculatePublic theCurve prv
+            peerId = calculatePublic theCurve prv,
+            isClient = False,
+            afterHello = False
           }
 
     return cState

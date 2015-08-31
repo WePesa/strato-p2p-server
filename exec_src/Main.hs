@@ -26,7 +26,7 @@ import           Control.Concurrent.STM
 import qualified Data.Map as Map
 import           Control.Monad
 import           Control.Concurrent.Async.Lifted 
-import           Control.Exception
+import           Control.Exception.Lifted
 import qualified Data.Binary as BN
 
 import           Data.Time.Clock.POSIX
@@ -101,7 +101,6 @@ main = do
   
   _ <- runResourceT $ do
           async $ (runEthClient connStr myPriv flags_address flags_port)
-          (runEthServer connStr myPriv flags_listen)
-
+          (runEthServer connStr myPriv flags_listen) 
   return ()
   

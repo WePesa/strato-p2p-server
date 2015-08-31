@@ -65,8 +65,10 @@ data EthCryptStateLite =
     ingressMAC::SHA3.Ctx,
     egressKey::B.ByteString,
     ingressKey::B.ByteString,
-    peerId::Point
-    } 
+    peerId::Point,
+    isClient::Bool,
+    afterHello::Bool
+  } 
 
 type EthCryptMLite a = StateT EthCryptStateLite a
 
@@ -136,11 +138,4 @@ getPeerByIP ip = do
   where actions = SQL.selectList [ PPeerIp SQL.==. (T.pack ip) ] []
 
   
-{-
-isDebugEnabled::ContextMLite Bool
-isDebugEnabled = do
-  cxt <- ask
-  cxt' <- readTVar cxt
-  return $ debugEnabled cxt 
--}
 

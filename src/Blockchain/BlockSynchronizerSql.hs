@@ -65,7 +65,7 @@ getBestBlockHash = do
   where actions =   E.select $
                        E.from $ \(bdRef) -> do
                        E.limit $ 1 
-                       E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
+                       E.orderBy [E.desc (bdRef E.^. BlockDataRefTotalDifficulty)]
                        return bdRef
 
 getBestBlock :: (EthCryptMLite ContextMLite) Block

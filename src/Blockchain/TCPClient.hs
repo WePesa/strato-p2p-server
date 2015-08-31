@@ -102,8 +102,12 @@ runEthClient connStr myPriv ip port = do
       mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
-      runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink server
+--      runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink server
 
+      runResourceT $ do
+        liftIO $ putStrLn "client session starting"
+        mSource' $$ handleMsgConduit =$= appSink server
+        liftIO $ putStrLn "client session ended"
  
 tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
 tcpHandshakeClient myPriv otherPubKey myNonce = do
@@ -139,8 +143,10 @@ tcpHandshakeClient myPriv otherPubKey myNonce = do
           egressKey=macEncKey,
           ingressMAC=SHA3.update (SHA3.init 256) $ 
                      (macEncKey `bXor` myNonce) `B.append` ingressCipher,
-          ingressKey=macEncKey
-          }
+          ingressKey=macEncKey,
+          isClient = True,
+          afterHello = False
+        }
   liftIO $ putStrLn $ "handshake negotiated: " ++ (show (peerId cState))
 
   

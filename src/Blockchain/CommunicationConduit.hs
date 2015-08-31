@@ -56,6 +56,8 @@ import qualified Database.Esqueleto as E
 ethVersion :: Int
 ethVersion = 61
 
+frontierGenesisHash = (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
+
 data RowNotification = TransactionNotification Int | BlockNotification Int
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
@@ -63,19 +65,41 @@ respondMsgConduit :: Message
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
    cxt' <- lift $ lift $ get
+   liftIO $ putStrLn $ "<<<<<<<\n" ++ (format m)
    
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
-         sendMsgConduit Hello {
+  
+         if ((isClient cxt)) then do -- put not back in
+           let helloMsg =  Hello {
                              version = 4,
                              clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
                              capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
-                             port = 30303,
+                             port = 0, -- formerly 30303
                              nodeId = peerId cxt
                            }
+           sendMsgConduit $ helloMsg
+           liftIO $ putStrLn $ " <responseMsgConduit> >>>>>>>>>>>\n" ++ (format helloMsg)
+         else do  
+           (h,d) <- lift $ lift $ getBestBlockHash
+           let statusMsg = Status{
+                              protocolVersion=fromIntegral ethVersion,
+                              networkID=1,
+                              totalDifficulty= fromIntegral $ d,
+                              latestHash=h,
+                              genesisHash=frontierGenesisHash
+                            }
+           sendMsgConduit $ statusMsg
+           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
+
+{-
+           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format $ GetPeers)
+           sendMsgConduit $ GetPeers
+-}
        Ping -> do
          sendMsgConduit Pong
+         liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
        GetPeers -> do
          sendMsgConduit $ Peers []
          sendMsgConduit GetPeers      
@@ -88,38 +112,78 @@ respondMsgConduit m = do
          sendMsgConduit $ Blocks blks
        Blocks blocks -> liftIO $ putStrLn "got new blocks"
        NewBlockPacket block baseDifficulty -> liftIO $ putStrLn "got a new block packet"
-       Status{latestHash=lh, genesisHash=gh} -> do
+       Status{} -> do
              (h,d)<- lift $ lift $ getBestBlockHash
-             liftIO $ putStrLn $ "replying to status, best blockHash: " ++ (show h)
-             sendMsgConduit Status{
+             let statusMsg = Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID=1,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
-                              genesisHash=(SHA 0xfd4af92a79c7fc2fd8bf0d342f2e832e1d4f485c85b9152d2039e03bc604fdca)   
+                              genesisHash=frontierGenesisHash   
                             }
+             sendMsgConduit $ statusMsg
+             liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
        Transactions lst ->
          sendMsgConduit (Transactions [])
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
        GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
-       
---handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+      
+{- 
+handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+handleMsgConduit = do
+  {- no obvious good place for this. If we are client and haven't said hello yet, say hello -}
+  cxt <- lift $ lift $ get
+  let helloMsg =  Hello {
+                           version = 4,
+                           clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
+                           capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion]
+                           port = 30303,
+                           nodeId = peerId cxt
+                         }
+        
+  case (isClient cxt && (not (afterHello cxt))) of
+{-    True -> do 
+         lift $ lift $ put $ cxt { afterHello = True }
+         liftIO $ putStrLn $ " <> hello <> >>>>>>>>>>>\n" ++ (format helloMsg)
+         sendMsgConduit helloMsg
+         handleMsgConduit -}
+    _ -> do 
+      mn <- await
+    
+      case mn of
+        (Just (EthMessage m)) -> do 
+          (respondMsgConduit m)
+          handleMsgConduit   
+        (Just (Notif (TransactionNotification n))) -> do
+          liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
+          tx <- lift $ lift $ getTransactionFromNotif n
+          let txMsg = Transactions (map rawTX2TX tx)
+          
+          sendMsgConduit $ txMsg
+          liftIO $ putStrLn $ ">>>>>>>>\n" ++ (format txMsg) 
+          handleMsgConduit   
+     
+        _ -> handleMsgConduit          
+-}
+
 handleMsgConduit = awaitForever $ \mn -> do
   case mn of
     (EthMessage m) -> respondMsgConduit m
     (Notif (TransactionNotification n)) -> do
          liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
          tx <- lift $ lift $ getTransactionFromNotif n
-         sendMsgConduit $ Transactions (map rawTX2TX tx)
+         let txMsg = Transactions (map rawTX2TX tx)
+         sendMsgConduit $ txMsg
+         liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
     _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
-    
+
 sendMsgConduit :: MonadIO m 
                => Message 
                -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
 sendMsgConduit msg = do
- 
+  
   let (pType, pData) = wireMessage2Obj msg
   let bytes =  B.cons pType $ rlpSerialize pData
   let frameSize = B.length bytes
@@ -138,11 +202,12 @@ sendMsgConduit msg = do
   frameMAC <- lift $ lift $ updateEgressMac =<< rawUpdateEgressMac frameCipher
 
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
-  
+
 
 recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
 --recvMsgConduit :: MonadIO m => Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
 recvMsgConduit = do
+
   headCipher <- CBN.take 16
   headMAC <- CBN.take 16
   expectedHeadMAC <- lift $ lift $ updateIngressMac $ (BL.toStrict headCipher)
@@ -171,9 +236,7 @@ recvMsgConduit = do
       packetData = rlpDeserialize $ B.drop 1 frameData
 
   yield . EthMessage  $ obj2WireMessage packetType packetData
-
-  liftIO $ putStrLn $ "just yielded (received message): " ++ (show $ format $ (obj2WireMessage packetType packetData))
-
+  recvMsgConduit
       
 bXor :: B.ByteString
      -> B.ByteString
