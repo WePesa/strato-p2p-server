@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Blockchain.ContextLite (
   ContextLite(..),
@@ -12,50 +13,30 @@ module Blockchain.ContextLite (
   initContextLite,
   addPeer,
   getPeerByIP,
-  EthCryptMLite(..),
+  EthCryptMLite,
   EthCryptStateLite(..)
   ) where
 
 
-import Control.Monad.IfElse
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Resource
 
-import Blockchain.Constants
 import Blockchain.DBM
+import Blockchain.DB.SQLDB
+import Blockchain.Data.DataDefs
+import qualified Blockchain.AESCTR as AES
+
 import qualified Data.ByteString as B
 import qualified Crypto.Hash.SHA3 as SHA3
 import qualified Database.Persist.Postgresql as SQL
+import qualified Database.PostgreSQL.Simple as PS
 
-import Blockchain.Data.Address
-import Blockchain.Data.AddressStateDB
-import Blockchain.DB.SQLDB
-import Blockchain.Data.DataDefs
-import Blockchain.Data.Transaction
-
-import Blockchain.Data.RLP
-
-import Blockchain.ExtWord
-import Blockchain.SHA
-import Blockchain.Util
-
-import           Crypto.PubKey.ECC.DH
 import           Crypto.Types.PubKey.ECC
-
-import qualified Data.NibbleString as N
-
-import Data.Conduit.Network
-import Network.Socket
-import Network.Haskoin.Crypto
 
 import Control.Concurrent.STM
 
-import qualified Data.Map as Map
 import qualified Data.Text as T
-import qualified Database.PostgreSQL.Simple as PS
-import Database.PostgreSQL.Simple.Notification
-import qualified Blockchain.AESCTR as AES
 
 data EthCryptStateLite =
   EthCryptStateLite {
@@ -81,7 +62,7 @@ data ContextLite =
 
 
 instance Show PS.Connection where
-  show conn = "Postgres Simple Connection"
+  show _ = "Postgres Simple Connection"
 
 type TContext = TVar ContextLite
 type ContextMLite = StateT ContextLite (ResourceT IO)

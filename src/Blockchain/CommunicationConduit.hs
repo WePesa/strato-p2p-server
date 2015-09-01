@@ -10,52 +10,33 @@ module Blockchain.CommunicationConduit (
   bXor
   ) where
 
-import Control.Monad.Trans.State
-import Control.Monad.IO.Class
-import Control.Monad.Trans
-import Data.Binary.Put
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
-import System.IO
-
-
 import Control.Monad
-import Control.Monad.IO.Class
+import Control.Monad.Trans
 import Control.Monad.Trans.State
+
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
+
 import Data.Bits
 import qualified Data.ByteString as B
-import System.IO
+import qualified Data.ByteString.Lazy as BL
 
 import Blockchain.SHA
-
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.RLP
 import Blockchain.Data.Wire
-import Blockchain.Data.DataDefs
-import Blockchain.DBM
-import Blockchain.RLPx
 import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
-import Blockchain.Data.Transaction
 import Blockchain.Data.BlockDB
 import Blockchain.Format
 
 import Conduit
-import Data.Conduit
 import qualified Data.Conduit.Binary as CBN
-import Control.Concurrent.STM
-import Control.Concurrent.STM.TBMChan
-
-import Data.Conduit.Serialization.Binary
-import Data.Bits
-
-import qualified Database.Esqueleto as E
 
 ethVersion :: Int
 ethVersion = 61
 
+frontierGenesisHash :: SHA
 frontierGenesisHash = (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
 
 data RowNotification = TransactionNotification Int | BlockNotification Int
@@ -64,7 +45,6 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 respondMsgConduit :: Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
-   cxt' <- lift $ lift $ get
    liftIO $ putStrLn $ "<<<<<<<\n" ++ (format m)
    
    case m of
@@ -101,7 +81,7 @@ respondMsgConduit m = do
          sendMsgConduit $ Peers []
          sendMsgConduit GetPeers      
 
-       BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
+       BlockHashes _ -> liftIO $ putStrLn "got new blockhashes"
 
        GetBlockHashes h maxBlocks -> do
          hashes <- lift $ lift $ getBlockHashes h maxBlocks
@@ -111,9 +91,9 @@ respondMsgConduit m = do
          blks <- lift $ lift $ handleBlockRequest shaList
          sendMsgConduit $ Blocks blks
 
-       Blocks blocks -> liftIO $ putStrLn "got new blocks"
+       Blocks _ -> liftIO $ putStrLn "got new blocks"
 
-       NewBlockPacket block baseDifficulty -> liftIO $ putStrLn "got a new block packet"
+       NewBlockPacket _ _ -> liftIO $ putStrLn "got a new block packet"
 
        Status{} -> do
              (h,d)<- lift $ lift $ getBestBlockHash
@@ -127,7 +107,7 @@ respondMsgConduit m = do
              sendMsgConduit $ statusMsg
              liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
 
-       Transactions lst ->
+       Transactions _ ->
          sendMsgConduit (Transactions [])
 
        Disconnect reason ->
@@ -136,6 +116,10 @@ respondMsgConduit m = do
        GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
       
+handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
+                            (ResourceT (EthCryptMLite ContextMLite))
+                            ()
+
 handleMsgConduit = awaitForever $ \mn -> do
   case mn of
     (EthMessage m) -> respondMsgConduit m
@@ -173,7 +157,6 @@ sendMsgConduit msg = do
 
 
 recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
---recvMsgConduit :: MonadIO m => Conduit B.ByteString (ResourceT (EthCryptMLite m)) MessageOrNotification
 recvMsgConduit = do
 
   headCipher <- CBN.take 16
@@ -234,12 +217,6 @@ decrypt input = do
   put cState{decryptState=aesState'}
   return output
 
-getEgressMac :: MonadIO m
-             => EthCryptMLite m B.ByteString
-getEgressMac = do
-  cState <- get
-  let mac = egressMAC cState
-  return $ B.take 16 $ SHA3.finalize mac
 
 rawUpdateEgressMac :: MonadIO m
                    => B.ByteString
@@ -260,12 +237,21 @@ updateEgressMac value = do
   rawUpdateEgressMac $
     value `bXor` (encryptECB (initAES $ egressKey cState) (B.take 16 $ SHA3.finalize mac))
 
+{-   -- commented for Wall --
+getEgressMac :: MonadIO m
+             => EthCryptMLite m B.ByteString
+getEgressMac = do
+  cState <- get
+  let mac = egressMAC cState
+  return $ B.take 16 $ SHA3.finalize mac
+
 getIngressMac :: MonadIO m 
               => EthCryptMLite m B.ByteString
 getIngressMac = do
   cState <- get
   let mac = ingressMAC cState
   return $ B.take 16 $ SHA3.finalize mac
+-}
 
 rawUpdateIngressMac :: MonadIO m
                     => B.ByteString

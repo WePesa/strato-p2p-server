@@ -8,20 +8,14 @@ module Blockchain.UDPServer (
 
 import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as NB
-import           Network.Haskoin.Crypto 
 
-import           Data.Conduit.TMChan
-import           Control.Concurrent.STM
-import qualified Data.Map as Map
 import           Control.Monad
-import           Control.Exception
-import qualified Data.Binary as BN
-
+import           Control.Monad.State
+import           Control.Monad.Trans.Resource
 
 import           Data.Time.Clock.POSIX
 import           Data.Time.Clock
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Base16 as B16
 import qualified Data.Text as T
 
 import           Blockchain.UDP
@@ -31,31 +25,21 @@ import           Blockchain.Data.DataDefs
 import           Blockchain.DB.SQLDB
 import           Blockchain.ExtWord
 import           Blockchain.ExtendedECDSA
-import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite 
-import qualified Blockchain.AESCTR as AES
-import           Blockchain.Handshake
-import           Blockchain.DBM
-
-import qualified Data.ByteString.Lazy as BL
+import           Blockchain.P2PUtil
 
 import           Data.Maybe
-import           Control.Monad.State
-import           Control.Monad.Trans.Resource
-import           Control.Monad
+
 import           Prelude 
-import           Data.Word
 import qualified Network.Haskoin.Internals as H
 import qualified Crypto.Hash.SHA3 as SHA3
 import           Crypto.PubKey.ECC.DH
-import           Crypto.Types.PubKey.ECC
 
-import           Blockchain.P2PUtil
 
 
 runEthUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
 runEthUDPServer cxt myPriv socket = do
-  runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
+  _ <- runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
   return ()
 
 connectMe :: Int 
@@ -76,8 +60,6 @@ udpHandshakeServer prv conn = do
 
    let ip = sockAddrToIP addr
 
-   db <- getSQLDB
-   
    let r = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ msg
        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 64 msg
        v = head . B.unpack $ B.take 1 $ B.drop 96 msg
@@ -95,18 +77,18 @@ udpHandshakeServer prv conn = do
    
    time <- liftIO $ round `fmap` getPOSIXTime
 
-   let (theType, theRLP) = ndPacketToRLP $
+   let (theType', theRLP) = ndPacketToRLP $
                                 (Pong (Endpoint "127.0.0.1" 30303 30303) 4 (time+50):: NodeDiscoveryPacket)
                                 
        theData = B.unpack $ rlpSerialize theRLP
-       SHA theMsgHash = hash $ B.pack $ (theType:theData)
+       SHA theMsgHash = hash $ B.pack $ (theType':theData)
 
-   ExtendedSignature signature yIsOdd <- liftIO $ H.withSource H.devURandom $ ecdsaSign  prv theMsgHash
+   ExtendedSignature signature' yIsOdd' <- liftIO $ H.withSource H.devURandom $ ecdsaSign  prv theMsgHash
 
-   let v = if yIsOdd then 1 else 0 
-       r = H.sigR signature
-       s = H.sigS signature
-       theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
+   let v' = if yIsOdd' then 1 else 0 
+       r' = H.sigR signature'
+       s' = H.sigS signature'
+       theSignature = word256ToBytes (fromIntegral r') ++ word256ToBytes (fromIntegral s') ++ [v']
        theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
    
    curTime <- liftIO $ getCurrentTime
