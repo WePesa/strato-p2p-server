@@ -80,7 +80,7 @@ respondMsgConduit m = do
                              nodeId = peerId cxt
                            }
            sendMsgConduit $ helloMsg
-           liftIO $ putStrLn $ " <responseMsgConduit> >>>>>>>>>>>\n" ++ (format helloMsg)
+           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format helloMsg)
          else do  
            (h,d) <- lift $ lift $ getBestBlockHash
            let statusMsg = Status{
@@ -93,25 +93,28 @@ respondMsgConduit m = do
            sendMsgConduit $ statusMsg
            liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
 
-{-
-           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format $ GetPeers)
-           sendMsgConduit $ GetPeers
--}
        Ping -> do
          sendMsgConduit Pong
          liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
+
        GetPeers -> do
          sendMsgConduit $ Peers []
          sendMsgConduit GetPeers      
+
        BlockHashes blockHashes -> liftIO $ putStrLn "got new blockhashes"
+
        GetBlockHashes h maxBlocks -> do
          hashes <- lift $ lift $ getBlockHashes h maxBlocks
          sendMsgConduit $ BlockHashes hashes 
+
        GetBlocks shaList -> do
          blks <- lift $ lift $ handleBlockRequest shaList
          sendMsgConduit $ Blocks blks
+
        Blocks blocks -> liftIO $ putStrLn "got new blocks"
+
        NewBlockPacket block baseDifficulty -> liftIO $ putStrLn "got a new block packet"
+
        Status{} -> do
              (h,d)<- lift $ lift $ getBestBlockHash
              let statusMsg = Status{
@@ -123,51 +126,16 @@ respondMsgConduit m = do
                             }
              sendMsgConduit $ statusMsg
              liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
+
        Transactions lst ->
          sendMsgConduit (Transactions [])
+
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
+
        GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
        _ -> liftIO $ putStrLn $ "unrecognized message"
       
-{- 
-handleMsgConduit :: Conduit MessageOrNotification (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
-handleMsgConduit = do
-  {- no obvious good place for this. If we are client and haven't said hello yet, say hello -}
-  cxt <- lift $ lift $ get
-  let helloMsg =  Hello {
-                           version = 4,
-                           clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
-                           capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion]
-                           port = 30303,
-                           nodeId = peerId cxt
-                         }
-        
-  case (isClient cxt && (not (afterHello cxt))) of
-{-    True -> do 
-         lift $ lift $ put $ cxt { afterHello = True }
-         liftIO $ putStrLn $ " <> hello <> >>>>>>>>>>>\n" ++ (format helloMsg)
-         sendMsgConduit helloMsg
-         handleMsgConduit -}
-    _ -> do 
-      mn <- await
-    
-      case mn of
-        (Just (EthMessage m)) -> do 
-          (respondMsgConduit m)
-          handleMsgConduit   
-        (Just (Notif (TransactionNotification n))) -> do
-          liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show n)
-          tx <- lift $ lift $ getTransactionFromNotif n
-          let txMsg = Transactions (map rawTX2TX tx)
-          
-          sendMsgConduit $ txMsg
-          liftIO $ putStrLn $ ">>>>>>>>\n" ++ (format txMsg) 
-          handleMsgConduit   
-     
-        _ -> handleMsgConduit          
--}
-
 handleMsgConduit = awaitForever $ \mn -> do
   case mn of
     (EthMessage m) -> respondMsgConduit m
