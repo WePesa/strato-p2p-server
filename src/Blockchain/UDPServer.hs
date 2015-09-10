@@ -66,7 +66,7 @@ udpHandshakeServer prv conn = do
 
        theType = head . B.unpack $ B.take 1$ B.drop 97 msg
        theRest = B.unpack $ B.drop 98 msg
-       (rlp, _) = rlpSplit theRest
+       (rlp, _) = rlpSplit $ B.pack theRest
 
        signature = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
                          
