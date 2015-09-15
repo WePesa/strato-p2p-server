@@ -85,9 +85,9 @@ initContextLite str = do
             PS.connectPassword = "api",
             PS.connectDatabase = "eth"
            }
-  dbs <- openDBsLite str
+  dbs <- openDBs
   return ContextLite {
-                    liteSQLDB = sqlDBLite dbs,                    
+                    liteSQLDB = sqlDB' dbs,                    
                     notifHandler=notif,
                     debugEnabled = False
                  }
