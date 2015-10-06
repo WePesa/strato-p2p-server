@@ -17,7 +17,7 @@ executable p2p-server
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base,
                        conduit,
                        conduit-combinators,
                        conduit-extra,
@@ -70,7 +70,7 @@ executable p2p-server
   
   
 library
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base,
                        conduit,
                        conduit-combinators,
                        conduit-extra,

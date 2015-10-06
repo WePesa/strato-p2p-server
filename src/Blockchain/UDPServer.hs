@@ -39,7 +39,7 @@ import           Crypto.PubKey.ECC.DH
 
 runEthUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
 runEthUDPServer cxt myPriv socket = do
-  _ <- runResourceT $ flip runStateT cxt $ udpHandshakeServer (H.PrvKey $ fromIntegral myPriv) socket
+  _ <- runResourceT $ flip runStateT cxt $ udpHandshakeServer (fromMaybe (error "invalid private nubmer in runEthUDPServer") $ H.makePrvKey $ fromIntegral myPriv) socket
   return ()
 
 connectMe :: Int 

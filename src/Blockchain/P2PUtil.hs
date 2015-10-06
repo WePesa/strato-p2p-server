@@ -35,11 +35,11 @@ theCurve :: Curve
 theCurve = getCurveByName SEC_p256k1
 
 hPubKeyToPubKey::H.PubKey->Point
-hPubKeyToPubKey (H.PubKeyU _) = error "PubKeyU not supported in hPubKeyToPUbKey yet"
-hPubKeyToPubKey (H.PubKey hPoint) = Point (fromIntegral x) (fromIntegral y)
+hPubKeyToPubKey pubKey = Point (fromIntegral x) (fromIntegral y)
   where
      x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX hPoint
      y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY hPoint
+     hPoint = H.pubKeyPoint pubKey
 
 ecdsaSign::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
 ecdsaSign prvKey' theHash = do

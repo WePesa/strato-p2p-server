@@ -19,6 +19,8 @@ import qualified Data.Binary as BN
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
+import           Data.Maybe
+
 import           Blockchain.UDP
 import           Blockchain.ExtWord
 import           Blockchain.CommunicationConduit
@@ -48,7 +50,7 @@ runEthClient :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
              -> Int
              -> m ()
 runEthClient connStr myPriv ip port = do
-  serverPubKey <- liftIO $ getServerPubKey (H.PrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
+  serverPubKey <- liftIO $ getServerPubKey (fromMaybe (error "invalid private number in call to runEthClient") $ H.makePrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
   liftIO $ putStrLn $ "server public key is : " ++ (show serverPubKey)       
 
   cxt <- initContextLite connStr
