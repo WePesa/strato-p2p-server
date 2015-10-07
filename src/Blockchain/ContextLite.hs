@@ -80,7 +80,7 @@ runEthCryptMLite cxt cState f = do
 
 
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
-initContextLite str = do
+initContextLite _ = do
   notif <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
             PS.connectPassword = "api",
             PS.connectDatabase = "eth"

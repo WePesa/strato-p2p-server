@@ -76,15 +76,15 @@ getBlockHashes shas numBlocks = do
 
         actions upperLimit lowerLimit  =
                    SQL.rawSql 
-		       (
-                        T.pack $ 
-                        "SELECT hash FROM block_data_ref WHERE number >= "
-                        ++ show lowerLimit
-                        ++ " AND number < "
-                        ++ show upperLimit ++ " ORDER BY number DESC"
-                        ++ " LIMIT " ++ show maxBlockHashes
-                       )
-                       [ ]                       
+                   (
+                     T.pack $ 
+                     "SELECT hash FROM block_data_ref WHERE number >= "
+                     ++ show lowerLimit
+                     ++ " AND number < "
+                     ++ show upperLimit ++ " ORDER BY number DESC"
+                     ++ " LIMIT " ++ show maxBlockHashes
+                   )
+                   [ ]                       
 
 maxBlockHashes :: Int
 maxBlockHashes = 2048
