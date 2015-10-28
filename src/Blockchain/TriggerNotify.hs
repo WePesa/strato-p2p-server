@@ -31,5 +31,6 @@ parseNotifPayload s = read $ last $ splitOn "," s :: Int
 notificationSource::PS.Connection->Source IO Notification
 notificationSource conn = forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
+    liftIO $ putStrLn $ "about to listen for notification"
     notif <- liftIO $ getNotification conn
     yield notif
