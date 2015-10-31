@@ -1,5 +1,5 @@
 
-name:                p2p-server
+name:                strato-p2p-server
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -28,7 +28,7 @@ executable p2p-server
                        containers,
                        word8,
                        lifted-async,
-                       ethereum-data-sql,
+                       blockapps-data,
                        persistent-postgresql,                   
                        resourcet,
                        monads-tf,
@@ -38,12 +38,12 @@ executable p2p-server
                        persistent-template,
                        esqueleto,
                        time,
-                       ethereum-merkle-patricia-db,
+                       merkle-patricia-db,
                        ethereum-rlp,
                        ethereum-util,
-                       p2p-server,
+                       strato-p2p-server,
                        base16-bytestring,
-                       ethereum-client-haskell,
+                       strato-p2p-client,
                        ethereum-encryption,
                        binary,
                        binary-conduit,
@@ -71,6 +71,7 @@ executable p2p-server
   
 library
   build-depends:       base,
+                       blockapps-data,
                        conduit,
                        conduit-combinators,
                        conduit-extra,
@@ -81,7 +82,7 @@ library
                        containers,
                        word8,
                        lifted-async,
-                       ethereum-data-sql,
+                       strato-p2p-client,
                        persistent-postgresql,                   
                        resourcet,
                        monads-tf,
@@ -91,11 +92,11 @@ library
                        persistent-template,
                        esqueleto,
                        time,
-                       ethereum-merkle-patricia-db,
+                       merkle-patricia-db,
                        ethereum-rlp,
                        ethereum-util,
                        base16-bytestring,
-                       ethereum-client-haskell,
+                       strato-p2p-client,
                        ethereum-encryption,
                        binary,
                        binary-conduit,
