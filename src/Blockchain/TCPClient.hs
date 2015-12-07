@@ -50,7 +50,10 @@ runEthClient :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
              -> Int
              -> m ()
 runEthClient connStr myPriv ip port = do
-  serverPubKey <- liftIO $ getServerPubKey (fromMaybe (error "invalid private number in call to runEthClient") $ H.makePrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
+  maybeServerPubKey <- liftIO $ getServerPubKey (fromMaybe (error "invalid private number in call to runEthClient") $ H.makePrvKey $ fromIntegral myPriv) ip (fromIntegral $ port)
+
+  let serverPubKey = fromMaybe (error "couldn't get peer pubkey") maybeServerPubKey
+
   liftIO $ putStrLn $ "server public key is : " ++ (show serverPubKey)       
 
   cxt <- initContextLite connStr
