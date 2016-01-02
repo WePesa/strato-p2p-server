@@ -25,6 +25,7 @@ import           HFlags
 import           Blockchain.TCPServer
 import           Blockchain.TCPClient
 
+import 		 System.IO
 
 connStr :: BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
@@ -39,6 +40,9 @@ defineFlag "name" ("Indiana Jones" :: String) "Who to greet."
 
 main :: IO ()
 main = do
+  hSetBuffering stdout NoBuffering
+  hSetBuffering stderr NoBuffering
+
   _ <- $initHFlags "Ethereum p2p"
   
   putStrLn $ "connect address: " ++ (flags_address)
