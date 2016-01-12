@@ -25,7 +25,7 @@ import           HFlags
 import           Blockchain.TCPServer
 import           Blockchain.TCPClient
 
-import 		 System.IO
+import System.IO
 
 connStr :: BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
