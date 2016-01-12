@@ -50,11 +50,11 @@ getBestBlock = do
                        E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
                        return blk
 
-getBlockHashes :: [SHA] -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
-getBlockHashes shas numBlocks = do
+getBlockHashes :: SHA -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
+getBlockHashes sha numBlocks = do
   db <- lift $ getSQLDB
    
-  firstBdRef <- E.runSqlPool (find $ head shas) $ db
+  firstBdRef <- E.runSqlPool (find sha) $ db
 
   let firstNumber = blockDataRefNumber $ (E.entityVal . head) $ firstBdRef
       total = min maxBlockHashes (fromIntegral numBlocks)
