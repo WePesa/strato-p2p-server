@@ -89,7 +89,7 @@ udpHandshakeServer prv conn = do
        r' = H.sigR signature'
        s' = H.sigS signature'
        theSignature = word256ToBytes (fromIntegral r') ++ word256ToBytes (fromIntegral s') ++ [v']
-       theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
+       theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType'] ++ theData
    
    curTime <- liftIO $ getCurrentTime
  
@@ -106,7 +106,7 @@ udpHandshakeServer prv conn = do
             }
  
    _ <- addPeer $ peer
-   _ <- liftIO $ NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType] ++ theData) addr
+   _ <- liftIO $ NB.sendTo conn ( B.pack $ theHash ++ theSignature ++ [theType'] ++ theData) addr
    
    udpHandshakeServer prv conn
    return () 
