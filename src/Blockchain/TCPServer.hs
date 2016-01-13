@@ -67,7 +67,7 @@ runEthServer connStr myPriv listenPort = do
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
-                            Nothing -> undefined
+                            Nothing -> error "peer is nothing after call to getPeerByIP"
                             Just peer' -> peer'
                           
       (_,cState) <-
