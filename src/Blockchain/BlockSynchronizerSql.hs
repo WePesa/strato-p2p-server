@@ -54,18 +54,22 @@ getBlockHashes :: SHA -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
 getBlockHashes sha numBlocks = do
   db <- lift $ getSQLDB
    
-  firstBdRef <- E.runSqlPool (find sha) $ db
+  ret <- E.runSqlPool (find sha) $ db
 
-  let firstNumber = blockDataRefNumber $ (E.entityVal . head) $ firstBdRef
-      total = min maxBlockHashes (fromIntegral numBlocks)
+  case ret of
+   [] -> return []
+   [bdRef] -> do
+     let firstNumber = blockDataRefNumber $ E.entityVal bdRef
+         total = min maxBlockHashes (fromIntegral numBlocks)
       
-  (blks :: [ SQL.Single SHA ] ) <- SQL.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ db
+     (blks :: [ SQL.Single SHA ] ) <- SQL.runSqlPool (actions (firstNumber) (max (firstNumber - (fromIntegral $ total)) 0 )) $ db
 
-  let blkShas = map SQL.unSingle blks
+     let blkShas = map SQL.unSingle blks
         
-  liftIO $ putStrLn $ "got back: " ++ (show $ length blkShas) ++ " blockHashes with eventual child " ++ (show firstNumber)
-  return $ blkShas
-  
+     liftIO $ putStrLn $ "got back: " ++ (show $ length blkShas) ++ " blockHashes with eventual child " ++ (show firstNumber)
+     return blkShas
+   x -> error "two blocks have the same hash in the DB"
+
   where find h =   E.select $
                        E.from $ \(bdRef) -> do
                        E.where_ ( (bdRef E.^. BlockDataRefHash) E.==. E.val h )
