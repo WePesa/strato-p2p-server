@@ -37,7 +37,9 @@ ethVersion :: Int
 ethVersion = 61
 
 frontierGenesisHash :: SHA
-frontierGenesisHash = (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
+frontierGenesisHash =
+  -- (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
+  SHA 0xc6c980ae0132279535f4d085b9ba2d508ef5d4b19459045f54dac46d797cf3bb
 
 data RowNotification = TransactionNotification Int | BlockNotification Int
 data MessageOrNotification = EthMessage Message | Notif RowNotification
