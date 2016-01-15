@@ -29,6 +29,7 @@ import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.UDPServer
+import           Blockchain.BlockNotify
 import           Blockchain.RawTXNotify
 
 import qualified Data.ByteString.Lazy as BL
@@ -62,7 +63,8 @@ runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
-    liftIO $ createTrigger (notifHandler cxt)
+    liftIO $ createTXTrigger (notifHandler cxt)
+    liftIO $ createBlockTrigger (notifHandler cxt)
     _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
 
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
@@ -76,10 +78,12 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt cState $ do
         let rSource = appSource app
-            nSource = txNotificationSource (liteSQLDB cxt) (notifHandler cxt)
+            txSource = txNotificationSource (liteSQLDB cxt) (notifHandler cxt)
                       =$= CL.map (Notif . TransactionNotification)
+            blockSource = blockNotificationSource (liteSQLDB cxt) (notifHandler cxt)
+                      =$= CL.map (Notif . uncurry BlockNotification)
 
-        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO txSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
         runResourceT $ do 

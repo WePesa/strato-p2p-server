@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings, FlexibleContexts, TypeFamilies #-}
 
 module Blockchain.RawTXNotify (
-  createTrigger,
+  createTXTrigger,
   txNotificationSource
   ) where
 
@@ -17,8 +17,8 @@ import           Control.Monad
 import Blockchain.Data.RawTransaction
 import Blockchain.DB.SQLDB
 
-createTrigger :: PS.Connection -> IO ()
-createTrigger conn = do
+createTXTrigger :: PS.Connection -> IO ()
+createTXTrigger conn = do
      res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\

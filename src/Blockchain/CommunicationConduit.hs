@@ -42,7 +42,7 @@ frontierGenesisHash =
   -- (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
   SHA 0xc6c980ae0132279535f4d085b9ba2d508ef5d4b19459045f54dac46d797cf3bb
 
-data RowNotification = TransactionNotification RawTransaction | BlockNotification Int
+data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 respondMsgConduit :: Message 
@@ -131,6 +131,11 @@ handleMsgConduit = awaitForever $ \mn -> do
          let txMsg = Transactions [rawTX2TX tx]
          sendMsgConduit $ txMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
+    (Notif (BlockNotification block difficulty)) -> do
+         liftIO $ putStrLn $ "got new block, maybe should feed it upstream, on row " ++ (show block)
+         let blockMsg = NewBlockPacket block difficulty
+         sendMsgConduit $ blockMsg
+         liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
     _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
 
 sendMsgConduit :: MonadIO m 
