@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, FlexibleContexts, TypeFamilies #-}
 
 module Blockchain.TriggerNotify (
   createTrigger,
@@ -6,11 +6,16 @@ module Blockchain.TriggerNotify (
   ) where
 
 import qualified Data.ByteString.Char8 as BC
+import qualified Database.Persist as SQL
+import qualified Database.Persist.Sql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
 import           Data.List.Split
 import           Control.Monad
+
+import Blockchain.Data.RawTransaction
+import Blockchain.DB.SQLDB
 
 createTrigger :: PS.Connection -> IO ()
 createTrigger conn = do
@@ -25,16 +30,19 @@ createTrigger conn = do
 
      putStrLn $ "created trigger with result: " ++ (show res2)
 
-notificationSource::PS.Connection->Source IO Int
-notificationSource conn = forever $ do
+
+--notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
+notificationSource::SQLDB->PS.Connection->Source IO RawTransaction
+notificationSource pool conn = forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     liftIO $ putStrLn $ "about to listen for notification"
-    rowId <- liftIO $ fmap (read . BC.unpack . notificationData) $ getNotification conn
-    yield rowId
+    rowId <- liftIO $ (fmap (read . BC.unpack . notificationData) $ getNotification conn::IO (SQL.Key RawTransaction))
+    maybeTx <- lift $ getTransaction pool rowId
+    case maybeTx of
+     Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
+     Just tx -> yield tx
 
-{-
-getTransactionFromNotif :: Int -> (EthCryptMLite ContextMLite ) [RawTransaction]
-getTransactionFromNotif row = do
-    pool <- lift $ getSQLDB      
-    SQL.runSqlPool (get row) pool
--}
+getTransaction::SQLDB->SQL.Key RawTransaction->IO (Maybe RawTransaction)
+getTransaction pool row = do
+    --pool <- getSQLDB      
+    SQL.runSqlPool (SQL.get row) pool

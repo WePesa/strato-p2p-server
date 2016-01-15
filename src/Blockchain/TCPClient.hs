@@ -39,6 +39,7 @@ import qualified Network.Haskoin.Internals as H
 import qualified Database.Persist.Postgresql as SQL
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
+import Blockchain.DB.SQLDB
 
 myNonce :: Word256
 myNonce = 25
@@ -65,7 +66,7 @@ runEthClient connStr myPriv ip port = do
 
     runEthCryptMLite cxt cState $ do
       let rSource = appSource server
-          nSource = notificationSource (notifHandler cxt)
+          nSource = notificationSource (liteSQLDB cxt) (notifHandler cxt)
                     =$= CL.map (Notif . TransactionNotification)
 
       mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 

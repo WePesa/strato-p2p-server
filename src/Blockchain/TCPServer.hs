@@ -49,6 +49,7 @@ import qualified Database.Persist.Postgresql as SQL
 import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
 import           Blockchain.Data.DataDefs
+import           Blockchain.DB.SQLDB
 
 import           Blockchain.P2PUtil
 import           Control.Concurrent.Async.Lifted
@@ -75,7 +76,7 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt cState $ do
         let rSource = appSource app
-            nSource = notificationSource (notifHandler cxt)
+            nSource = notificationSource (liteSQLDB cxt) (notifHandler cxt)
                       =$= CL.map (Notif . TransactionNotification)
 
         mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
