@@ -29,7 +29,7 @@ import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
 import           Blockchain.UDPServer
-import           Blockchain.TriggerNotify
+import           Blockchain.RawTXNotify
 
 import qualified Data.ByteString.Lazy as BL
 
@@ -76,7 +76,7 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt cState $ do
         let rSource = appSource app
-            nSource = notificationSource (liteSQLDB cxt) (notifHandler cxt)
+            nSource = txNotificationSource (liteSQLDB cxt) (notifHandler cxt)
                       =$= CL.map (Notif . TransactionNotification)
 
         mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
