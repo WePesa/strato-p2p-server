@@ -22,7 +22,7 @@ createTXTrigger conn = do
      res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\
-    \     PERFORM pg_notify('new_transaction', NEW.id ); \n\
+    \     PERFORM pg_notify('new_transaction', NEW.id::Char ); \n\
     \     RETURN NULL; \n\
     \ END; \n\
 \ $tx_notify$ LANGUAGE plpgsql; \n\

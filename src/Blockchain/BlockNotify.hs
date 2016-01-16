@@ -21,13 +21,13 @@ import Blockchain.DB.SQLDB
 createBlockTrigger :: PS.Connection -> IO ()
 createBlockTrigger conn = do
      res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON block;\n\
-\CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $p2p_block_notify$ \n\ 
+\CREATE OR REPLACE FUNCTION p2p_block_notify() RETURNS TRIGGER AS $p2p_block_notify$ \n\ 
     \ BEGIN \n\
-    \     PERFORM pg_notify('p2p_new_block', NEW.id ); \n\
+    \     PERFORM pg_notify('p2p_new_block', NEW.id::Char ); \n\
     \     RETURN NULL; \n\
     \ END; \n\
 \ $p2p_block_notify$ LANGUAGE plpgsql; \n\
-\ CREATE TRIGGER p2p_block_notify AFTER INSERT OR DELETE ON block FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
+\ CREATE TRIGGER p2p_block_notify AFTER INSERT OR DELETE ON block FOR EACH ROW EXECUTE PROCEDURE p2p_block_notify();"
 
      putStrLn $ "created trigger with result: " ++ (show res2)
 
