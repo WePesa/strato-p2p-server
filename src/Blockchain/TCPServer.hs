@@ -83,7 +83,7 @@ runEthServer connStr myPriv listenPort = do
             blockSource = blockNotificationSource (liteSQLDB cxt) (notifHandler cxt)
                       =$= CL.map (Notif . uncurry BlockNotification)
 
-        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO txSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO blockSource, transPipe liftIO txSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
         runResourceT $ do 
