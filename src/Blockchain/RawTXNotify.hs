@@ -22,7 +22,7 @@ createTXTrigger conn = do
      res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\
-    \     PERFORM pg_notify('new_transaction', NEW.id::Char ); \n\
+    \     PERFORM pg_notify('new_transaction', NEW.id::text ); \n\
     \     RETURN NULL; \n\
     \ END; \n\
 \ $tx_notify$ LANGUAGE plpgsql; \n\
@@ -37,7 +37,7 @@ txNotificationSource pool conn = forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     liftIO $ putStrLn $ "about to listen for raw transaction notifications"
     rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn
-    liftIO $ putStrLn $ "########### raw transaction has been added"
+    liftIO $ putStrLn $ "########### raw transaction has been added: rowId=" ++ show rowId
     maybeTx <- lift $ getTransaction pool rowId
     case maybeTx of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
