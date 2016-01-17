@@ -66,7 +66,7 @@ runEthClient connStr myPriv ip port = do
 
     runEthCryptMLite cxt cState $ do
       let rSource = appSource server
-          nSource = txNotificationSource (liteSQLDB cxt) (notifHandler cxt)
+          nSource = txNotificationSource (liteSQLDB cxt) (notifHandler1 cxt)
                     =$= CL.map (Notif . TransactionNotification)
 
       mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 

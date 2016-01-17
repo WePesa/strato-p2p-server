@@ -63,8 +63,8 @@ runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
-    liftIO $ createTXTrigger (notifHandler cxt)
-    liftIO $ createBlockTrigger (notifHandler cxt)
+    liftIO $ createTXTrigger (notifHandler1 cxt)
+    liftIO $ createBlockTrigger (notifHandler2 cxt)
     _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
 
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
@@ -78,9 +78,9 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt cState $ do
         let rSource = appSource app
-            txSource = txNotificationSource (liteSQLDB cxt) (notifHandler cxt)
+            txSource = txNotificationSource (liteSQLDB cxt) (notifHandler1 cxt)
                       =$= CL.map (Notif . TransactionNotification)
-            blockSource = blockNotificationSource (liteSQLDB cxt) (notifHandler cxt)
+            blockSource = blockNotificationSource (liteSQLDB cxt) (notifHandler2 cxt)
                       =$= CL.map (Notif . uncurry BlockNotification)
 
         mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO blockSource, transPipe liftIO txSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 

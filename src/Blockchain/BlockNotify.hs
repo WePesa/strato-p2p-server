@@ -36,8 +36,9 @@ createBlockTrigger conn = do
 blockNotificationSource::SQLDB->PS.Connection->Source IO (Block, Integer)
 blockNotificationSource pool conn = forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN p2p_new_block;"
-    liftIO $ putStrLn $ "about to listen for notification"
-    rowId <- liftIO $ (fmap (read . BC.unpack . notificationData) $ getNotification conn::IO (SQL.Key Block))
+    liftIO $ putStrLn $ "about to listen for new block notifications"
+    rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn
+    liftIO $ putStrLn $ "######## new block has arrived"
     maybeTx <- lift $ getBlockFromKey pool rowId
     case maybeTx of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"

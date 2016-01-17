@@ -56,7 +56,8 @@ type EthCryptMLite a = StateT EthCryptStateLite a
 data ContextLite =
   ContextLite {
     liteSQLDB::SQLDB,
-    notifHandler::PS.Connection,
+    notifHandler1::PS.Connection,
+    notifHandler2::PS.Connection,
     debugEnabled::Bool
   } deriving Show
 
@@ -81,14 +82,19 @@ runEthCryptMLite cxt cState f = do
 
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
 initContextLite _ = do
-  notif <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+  notif1 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+            PS.connectPassword = "api",
+            PS.connectDatabase = "eth"
+           }
+  notif2 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
             PS.connectPassword = "api",
             PS.connectDatabase = "eth"
            }
   dbs <- openDBs
   return ContextLite {
                     liteSQLDB = sqlDB' dbs,                    
-                    notifHandler=notif,
+                    notifHandler1=notif1,
+                    notifHandler2=notif2,
                     debugEnabled = False
                  }
 
