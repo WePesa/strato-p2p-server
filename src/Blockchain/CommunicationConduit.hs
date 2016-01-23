@@ -28,6 +28,7 @@ import Blockchain.Data.Wire
 import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
+import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.Data.RawTransaction
 import Blockchain.Format
 
@@ -66,12 +67,13 @@ respondMsgConduit m = do
            liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format helloMsg)
          else do  
            (h,d) <- lift $ lift $ getBestBlockHash
+           genHash <- lift . lift . lift $ getGenesisBlockHash
            let statusMsg = Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID=1,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
-                              genesisHash=frontierGenesisHash
+                              genesisHash=genHash
                             }
            sendMsgConduit $ statusMsg
            liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
@@ -100,12 +102,13 @@ respondMsgConduit m = do
 
        Status{} -> do
              (h,d)<- lift $ lift $ getBestBlockHash
+             genHash <- lift . lift . lift $ getGenesisBlockHash
              let statusMsg = Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID=1,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
-                              genesisHash=frontierGenesisHash   
+                              genesisHash=genHash
                             }
              sendMsgConduit $ statusMsg
              liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
