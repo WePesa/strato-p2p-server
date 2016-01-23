@@ -55,6 +55,8 @@ import           Blockchain.DB.SQLDB
 import           Blockchain.P2PUtil
 import           Control.Concurrent.Async.Lifted
 
+import           Blockchain.ServOptions
+    
 runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m) 
              => SQL.ConnectionString     
              -> PrivateNumber
@@ -65,8 +67,10 @@ runEthServer connStr myPriv listenPort = do
 
     liftIO $ createTXTrigger (notifHandler1 cxt)
     liftIO $ createBlockTrigger (notifHandler2 cxt)
-    _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
-
+    when flags_runUDPServer $ do
+      _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
+      return ()
+           
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
