@@ -32,6 +32,8 @@ import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.Data.RawTransaction
 import Blockchain.Format
 
+import Blockchain.ServOptions
+
 import Conduit
 import qualified Data.Conduit.Binary as CBN
 
@@ -70,7 +72,7 @@ respondMsgConduit m = do
            genHash <- lift . lift . lift $ getGenesisBlockHash
            let statusMsg = Status{
                               protocolVersion=fromIntegral ethVersion,
-                              networkID=1,
+                              networkID=flags_networkID,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
                               genesisHash=genHash
@@ -105,7 +107,7 @@ respondMsgConduit m = do
              genHash <- lift . lift . lift $ getGenesisBlockHash
              let statusMsg = Status{
                               protocolVersion=fromIntegral ethVersion,
-                              networkID=1,
+                              networkID=flags_networkID,
                               totalDifficulty= fromIntegral $ d,
                               latestHash=h,
                               genesisHash=genHash
