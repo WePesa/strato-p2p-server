@@ -67,10 +67,13 @@ runEthServer connStr myPriv listenPort = do
 
     liftIO $ createTXTrigger (notifHandler1 cxt)
     liftIO $ createBlockTrigger (notifHandler2 cxt)
-    when flags_runUDPServer $ do
-      _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
-      return ()
-           
+    if flags_runUDPServer 
+      then do
+        liftIO $ putStrLn "Starting UDP server"
+        _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
+        return ()
+      else liftIO $ putStrLn "UDP server disabled"
+       
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
