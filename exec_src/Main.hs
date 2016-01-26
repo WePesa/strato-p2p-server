@@ -50,7 +50,9 @@ main = do
 --      myPublic = calculatePublic theCurve (fromIntegral myPriv)
   
   _ <- runResourceT $ do
-          _ <- async $ (runEthClient connStr myPriv flags_address flags_port)
+          when flags_runTCPClient $ do
+             _ <- async $ (runEthClient connStr myPriv flags_address flags_port)
+             return ()
           (runEthServer connStr myPriv flags_listen) 
   return ()
   
