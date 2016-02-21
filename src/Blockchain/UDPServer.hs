@@ -51,7 +51,7 @@ connectMe port = do
   sock <- S.socket (S.addrFamily serveraddr) S.Datagram S.defaultProtocol
   S.bindSocket sock (S.addrAddress serveraddr) >> return sock
 
-udpHandshakeServer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m, MonadIO m) 
+udpHandshakeServer :: HasSQLDB m 
                    => H.PrvKey 
                    -> S.Socket
                    -> m ()
