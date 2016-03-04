@@ -68,7 +68,7 @@ getBlockHashes sha numBlocks = do
         
      liftIO $ putStrLn $ "got back: " ++ (show $ length blkShas) ++ " blockHashes with eventual child " ++ (show firstNumber)
      return blkShas
-   x -> error "two blocks have the same hash in the DB"
+   _ -> error "two blocks have the same hash in the DB"
 
   where find h =   E.select $
                        E.from $ \(bdRef) -> do

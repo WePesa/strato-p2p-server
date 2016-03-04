@@ -21,7 +21,6 @@ import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
-import Blockchain.SHA
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.RLP
 import Blockchain.Data.Wire
@@ -40,10 +39,12 @@ import qualified Data.Conduit.Binary as CBN
 ethVersion :: Int
 ethVersion = 61
 
+{-
 frontierGenesisHash :: SHA
 frontierGenesisHash =
   -- (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
   SHA 0xc6c980ae0132279535f4d085b9ba2d508ef5d4b19459045f54dac46d797cf3bb
+-}
 
 data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
 data MessageOrNotification = EthMessage Message | Notif RowNotification
@@ -141,7 +142,7 @@ handleMsgConduit = awaitForever $ \mn -> do
          let blockMsg = NewBlockPacket block difficulty
          sendMsgConduit $ blockMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
-    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
+--    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
 
 sendMsgConduit :: MonadIO m 
                => Message 

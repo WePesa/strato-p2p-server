@@ -11,7 +11,6 @@ import qualified Database.Persist.Sql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
-import           Data.List.Split
 import           Control.Monad
 
 import Blockchain.Data.BlockDB
@@ -43,8 +42,8 @@ blockNotificationSource pool conn = forever $ do
     maybeBlock <- lift $ getBlockFromKey pool rowId
     case maybeBlock of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
-     Just (b, difficulty, hash) -> do
-       when (hash /= SHA 1) $ yield (b, difficulty)
+     Just (b, difficulty, hash') -> do
+       when (hash' /= SHA 1) $ yield (b, difficulty)
 
 getBlockFromKey::SQLDB->SQL.Key BlockDataRef->IO (Maybe (Block, Integer, SHA))
 getBlockFromKey pool row = do

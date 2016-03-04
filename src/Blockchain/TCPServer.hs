@@ -47,10 +47,7 @@ import qualified Network.Haskoin.Internals as H
 
 import           Data.Bits
 import qualified Database.Persist.Postgresql as SQL
-import           Database.PostgreSQL.Simple.Notification
-import qualified Data.ByteString.Char8 as BC
 import           Blockchain.Data.DataDefs
-import           Blockchain.DB.SQLDB
 
 import           Blockchain.P2PUtil
 import           Control.Concurrent.Async.Lifted
