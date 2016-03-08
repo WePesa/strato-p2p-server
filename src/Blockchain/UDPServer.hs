@@ -30,6 +30,8 @@ import           Blockchain.P2PUtil
 
 import           Data.Maybe
 
+import           System.Entropy
+
 import           Prelude 
 import qualified Network.Haskoin.Internals as H
 import qualified Crypto.Hash.SHA3 as SHA3
@@ -83,7 +85,7 @@ udpHandshakeServer prv conn = do
        theData = B.unpack $ rlpSerialize theRLP
        SHA theMsgHash = hash $ B.pack $ (theType':theData)
 
-   ExtendedSignature signature' yIsOdd' <- liftIO $ H.withSource H.devURandom $ ecdsaSign  prv theMsgHash
+   ExtendedSignature signature' yIsOdd' <- liftIO $ H.withSource getEntropy $ ecdsaSign  prv theMsgHash
 
    let v' = if yIsOdd' then 1 else 0 
        r' = H.sigR signature'

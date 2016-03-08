@@ -63,7 +63,8 @@ executable strato-p2p-server
                        split,
                        stm-chans,
                        hflags,
-                       lifted-base
+                       lifted-base,
+                       entropy
 
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
@@ -117,7 +118,8 @@ library
                        split,
                        stm-chans,
                        hflags,
-                       lifted-base
+                       lifted-base,
+                       entropy
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,
