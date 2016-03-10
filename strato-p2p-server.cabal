@@ -28,7 +28,6 @@ executable strato-p2p-server
                        containers,
                        word8,
                        lifted-async,
-                       blockapps-data-db,
                        blockapps-data,
                        persistent-postgresql,                   
                        resourcet,
@@ -73,7 +72,6 @@ executable strato-p2p-server
   
 library
   build-depends:       base,
-                       blockapps-data-db,
                        blockapps-data,
                        conduit,
                        conduit-combinators,
