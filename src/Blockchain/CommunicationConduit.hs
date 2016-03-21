@@ -86,10 +86,6 @@ respondMsgConduit m = do
          sendMsgConduit Pong
          liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
 
-       GetPeers -> do
-         sendMsgConduit $ Peers []
-         sendMsgConduit GetPeers      
-
        BlockHashes _ -> liftIO $ putStrLn "got new blockhashes"
 
        GetBlockHashes h maxBlocks -> do
@@ -102,7 +98,7 @@ respondMsgConduit m = do
 
        Blocks _ -> liftIO $ putStrLn "got new blocks"
 
-       NewBlockPacket _ _ -> liftIO $ putStrLn "got a new block packet"
+       NewBlock _ _ -> liftIO $ putStrLn "got a new block packet"
 
        Status{} -> do
              (h,d)<- lift $ lift $ getBestBlockHash
@@ -123,7 +119,7 @@ respondMsgConduit m = do
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
-       GetTransactions _ -> liftIO $ putStrLn "peer asked for transaction"
+       NewBlockHashes _ -> liftIO $ putStrLn "peer sent new block hashes"
        _ -> liftIO $ putStrLn $ "unrecognized message"
       
 handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
@@ -140,7 +136,7 @@ handleMsgConduit = awaitForever $ \mn -> do
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
     (Notif (BlockNotification block difficulty)) -> do
          liftIO $ putStrLn $ "got new block, maybe should feed it upstream, on row " ++ (show block)
-         let blockMsg = NewBlockPacket block difficulty
+         let blockMsg = NewBlock block difficulty
          sendMsgConduit $ blockMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
 --    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
