@@ -20,6 +20,7 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.Maybe
 
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.RLP
@@ -35,7 +36,7 @@ import Blockchain.Format
 import Blockchain.ServOptions
 
 import Conduit
-import qualified Data.Conduit.Binary as CBN
+import qualified Data.Conduit.Binary as CB
 
 ethVersion :: Int
 ethVersion = 61
@@ -165,12 +166,19 @@ sendMsgConduit msg = do
 
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
 
+--cbSafeTake::Monad m=>Int->ConduitM B.ByteString B.ByteString m (Maybe BL.ByteString)
+cbSafeTake i = do
+    ret <- CB.take i
+    if BL.length ret /= fromIntegral i
+       then return Nothing
+       else return $ Just ret
+            
 
 recvMsgConduit :: Conduit B.ByteString (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification
 recvMsgConduit = do
 
-  headCipher <- CBN.take 16
-  headMAC <- CBN.take 16
+  headCipher <- fmap (fromMaybe $ error "Peer hung up") $ cbSafeTake 16
+  headMAC <- fmap (fromMaybe $ error "Peer hung up") $ cbSafeTake 16
   expectedHeadMAC <- lift $ lift $ updateIngressMac $ (BL.toStrict headCipher)
   
   when (expectedHeadMAC /= (BL.toStrict headMAC)) $ error ("oops, head mac isn't what I expected, headCipher: " ++ (show headCipher))
@@ -183,8 +191,8 @@ recvMsgConduit = do
         fromIntegral (header `B.index` 2)
       frameBufferSize = (16 - (frameSize `mod` 16)) `mod` 16
 
-  frameCipher <- CBN.take (frameSize + frameBufferSize)
-  frameMAC <- CBN.take 16
+  frameCipher <- fmap (fromMaybe $ error "Peer hung up") $ cbSafeTake (frameSize + frameBufferSize)
+  frameMAC <- fmap (fromMaybe $ error "Peer hung up") $ cbSafeTake 16
 
 
   expectedFrameMAC <- lift $ lift $ updateIngressMac =<< rawUpdateIngressMac (BL.toStrict frameCipher)
