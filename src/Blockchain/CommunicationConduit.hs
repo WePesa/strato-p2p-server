@@ -87,18 +87,6 @@ respondMsgConduit m = do
          sendMsgConduit Pong
          liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
 
-       BlockHashes _ -> liftIO $ putStrLn "got new blockhashes"
-
-       GetBlockHashes h maxBlocks -> do
-         hashes <- lift $ lift $ getBlockHashes h maxBlocks
-         sendMsgConduit $ BlockHashes hashes 
-
-       GetBlocks shaList -> do
-         blks <- lift $ lift $ handleBlockRequest shaList
-         sendMsgConduit $ Blocks blks
-
-       Blocks _ -> liftIO $ putStrLn "got new blocks"
-
        NewBlock _ _ -> liftIO $ putStrLn "got a new block packet"
 
        Status{} -> do
