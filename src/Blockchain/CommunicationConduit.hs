@@ -23,11 +23,14 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Maybe
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.Data.BlockHeader
 import Blockchain.Data.RLP
 import Blockchain.Data.Wire
 import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
+import Blockchain.Data.BlockOffset
+import Blockchain.Data.DataDefs
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.Data.RawTransaction
 import Blockchain.Error
@@ -102,6 +105,17 @@ respondMsgConduit m = do
        Transactions _ ->
          sendMsgConduit (Transactions [])
 
+       GetBlockHeaders (BlockNumber start) max 0 Forward -> do
+         blockOffsets <- lift $ lift $ lift $ getBlockOffsetsForNumber $ fromIntegral start
+         
+         blocks <-
+           case blockOffsets of
+            [] -> return []
+            (blockOffset:rest) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral $ blockOffsetOffset blockOffset
+                
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader blocks
+         return ()
+                        
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
