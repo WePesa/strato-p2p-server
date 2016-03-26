@@ -59,18 +59,16 @@ respondMsgConduit m = do
    case m of
        Hello{} -> do
          cxt <- lift $ lift $ get
-  
-         if ((isClient cxt)) then do -- put not back in
-           let helloMsg =  Hello {
-                             version = 4,
-                             clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
-                             capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
-                             port = 0, -- formerly 30303
-                             nodeId = peerId cxt
-                           }
-           sendMsgConduit $ helloMsg
-           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format helloMsg)
-         else do  
+         let helloMsg =  Hello {
+               version = 4,
+               clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
+               capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
+               port = 0, -- formerly 30303
+               nodeId = peerId cxt
+               }
+         sendMsgConduit $ helloMsg
+         liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format helloMsg)
+       Status{} -> do
            (h,d) <- lift $ lift $ getBestBlockHash
            genHash <- lift . lift . lift $ getGenesisBlockHash
            let statusMsg = Status{
@@ -82,7 +80,6 @@ respondMsgConduit m = do
                             }
            sendMsgConduit $ statusMsg
            liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
-
        Ping -> do
          sendMsgConduit Pong
          liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
