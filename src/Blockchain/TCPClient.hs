@@ -37,9 +37,7 @@ import           Crypto.Cipher.AES
 import qualified Network.Haskoin.Internals as H
 
 import qualified Database.Persist.Postgresql as SQL
-import           Database.PostgreSQL.Simple.Notification
 import qualified Data.ByteString.Char8 as BC
-import Blockchain.DB.SQLDB
 
 myNonce :: Word256
 myNonce = 25

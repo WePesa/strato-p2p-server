@@ -32,7 +32,6 @@ import Blockchain.Data.BlockDB
 import Blockchain.Data.BlockOffset
 import Blockchain.Data.DataDefs
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
-import Blockchain.Data.RawTransaction
 import Blockchain.Error
 import Blockchain.Format
 
@@ -55,8 +54,9 @@ data RowNotification = TransactionNotification RawTransaction | BlockNotificatio
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 
+isContiguous::(Eq a, Num a)=>[a]->Bool
 isContiguous (x:y:rest) | y == x + 1 = isContiguous $ y:rest
-isContiguous [x] = True
+isContiguous [_] = True
 isContiguous _ = False
 
 respondMsgConduit :: Message 
@@ -94,23 +94,10 @@ respondMsgConduit m = do
 
        NewBlock _ _ -> liftIO $ putStrLn "got a new block packet"
 
-       Status{} -> do
-             (h,d)<- lift $ lift $ getBestBlockHash
-             genHash <- lift . lift . lift $ getGenesisBlockHash
-             let statusMsg = Status{
-                              protocolVersion=fromIntegral ethVersion,
-                              networkID=flags_networkID,
-                              totalDifficulty= fromIntegral $ d,
-                              latestHash=h,
-                              genesisHash=genHash
-                            }
-             sendMsgConduit $ statusMsg
-             liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
-
        Transactions _ ->
          sendMsgConduit (Transactions [])
 
-       GetBlockHeaders start max 0 Forward -> do
+       GetBlockHeaders start max' 0 Forward -> do
          blockOffsets <-
            case start of
             BlockNumber n -> lift $ lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
@@ -121,7 +108,7 @@ respondMsgConduit m = do
             [] -> return []
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
                 
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader (take max blocks)
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader (take max' blocks)
          return ()
 
        GetBlockBodies hashes -> do
@@ -155,9 +142,9 @@ handleMsgConduit = awaitForever $ \mn -> do
          let txMsg = Transactions [rawTX2TX tx]
          sendMsgConduit $ txMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
-    (Notif (BlockNotification block difficulty)) -> do
-         liftIO $ putStrLn $ "got new block, maybe should feed it upstream, on row " ++ (show block)
-         let blockMsg = NewBlock block difficulty
+    (Notif (BlockNotification b d)) -> do
+         liftIO $ putStrLn $ "got new block, maybe should feed it upstream, on row " ++ (show b)
+         let blockMsg = NewBlock b d
          sendMsgConduit $ blockMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
 --    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
@@ -186,7 +173,7 @@ sendMsgConduit msg = do
 
   yield . B.concat $ [headCipher,headMAC,frameCipher,frameMAC]
 
---cbSafeTake::Monad m=>Int->ConduitM B.ByteString B.ByteString m (Maybe BL.ByteString)
+cbSafeTake::Monad m=>Int->ConduitM B.ByteString o m (Maybe BL.ByteString)
 cbSafeTake i = do
     ret <- CB.take i
     if BL.length ret /= fromIntegral i
