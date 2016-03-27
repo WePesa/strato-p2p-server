@@ -54,6 +54,11 @@ frontierGenesisHash =
 data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
+
+isContiguous (x:y:rest) | y == x + 1 = isContiguous $ y:rest
+isContiguous [x] = True
+isContiguous _ = False
+
 respondMsgConduit :: Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
@@ -121,7 +126,12 @@ respondMsgConduit m = do
 
        GetBlockBodies hashes -> do
          offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
-         maybeBlocks <- liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
+         maybeBlocks <- 
+           if isContiguous offsets
+             then liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral $ head offsets
+             else do
+               liftIO $ putStrLn "############ Warning: Very ineffecient block body query"
+               liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
          let blocks = catMaybes maybeBlocks
          if (length maybeBlocks == length blocks) 
            then sendMsgConduit $ BlockBodies $ map blockToBody blocks
