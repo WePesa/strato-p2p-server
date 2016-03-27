@@ -105,13 +105,16 @@ respondMsgConduit m = do
        Transactions _ ->
          sendMsgConduit (Transactions [])
 
-       GetBlockHeaders (BlockNumber start) max 0 Forward -> do
-         blockOffsets <- lift $ lift $ lift $ getBlockOffsetsForNumber $ fromIntegral start
+       GetBlockHeaders start max 0 Forward -> do
+         blockOffsets <-
+           case start of
+            BlockNumber n -> lift $ lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
+            BlockHash h -> lift $ lift $ lift $ getBlockOffsetsForHashes [h]
          
          blocks <-
            case blockOffsets of
             [] -> return []
-            (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral $ blockOffsetOffset blockOffset
+            (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
                 
          sendMsgConduit $ BlockHeaders $ map blockToBlockHeader (take max blocks)
          return ()
