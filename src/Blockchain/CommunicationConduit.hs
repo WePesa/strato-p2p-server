@@ -111,9 +111,9 @@ respondMsgConduit m = do
          blocks <-
            case blockOffsets of
             [] -> return []
-            (blockOffset:rest) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral $ blockOffsetOffset blockOffset
+            (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral $ blockOffsetOffset blockOffset
                 
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader blocks
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader (take max blocks)
          return ()
 
        GetBlockBodies hashes -> do
@@ -128,7 +128,7 @@ respondMsgConduit m = do
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
        NewBlockHashes _ -> liftIO $ putStrLn "peer sent new block hashes"
-       _ -> liftIO $ putStrLn $ "unrecognized message"
+       msg -> liftIO $ putStrLn $ "unrecognized message: " ++ show msg
       
 handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
                             (ResourceT (EthCryptMLite ContextMLite))
