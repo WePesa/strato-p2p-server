@@ -115,7 +115,15 @@ respondMsgConduit m = do
                 
          sendMsgConduit $ BlockHeaders $ map blockToBlockHeader blocks
          return ()
-                        
+
+       GetBlockBodies hashes -> do
+         offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
+         maybeBlocks <- liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
+         let blocks = catMaybes maybeBlocks
+         if (length maybeBlocks == length blocks) 
+           then sendMsgConduit $ BlockBodies $ map blockToBody blocks
+           else liftIO $ putStrLn "Peer is asking for block bodies I don't have, I will just ignore the request"
+                
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
