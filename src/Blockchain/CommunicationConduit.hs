@@ -31,6 +31,7 @@ import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
 import Blockchain.Data.BlockOffset
 import Blockchain.Data.DataDefs
+import qualified Blockchain.Database.MerklePatricia as MP
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.Error
 import Blockchain.Format
@@ -108,7 +109,7 @@ respondMsgConduit m = do
             [] -> return []
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
                 
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader (take max' blocks)
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.emptyTriePtr) . blockDataStateRoot . blockBlockData) blocks
          return ()
 
        GetBlockBodies hashes -> do
