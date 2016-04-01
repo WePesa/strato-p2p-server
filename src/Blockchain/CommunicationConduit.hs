@@ -54,10 +54,10 @@ frontierGenesisHash =
 data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
-
 isContiguous::(Eq a, Num a)=>[a]->Bool
-isContiguous (x:y:rest) | y == x + 1 = isContiguous $ y:rest
+isContiguous [] = True
 isContiguous [_] = True
+isContiguous (x:y:rest) | y == x + 1 = isContiguous $ y:rest
 isContiguous _ = False
 
 respondMsgConduit :: Message 
@@ -114,10 +114,12 @@ respondMsgConduit m = do
 
        GetBlockBodies hashes -> do
          offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
+         when (length offsets /= length hashes) $ liftIO $ putStrLn $ "########### Warning: peer is asking for blocks I don't have"
          maybeBlocks <- 
-           if isContiguous offsets
-             then liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral $ head offsets
-             else do
+           case (isContiguous offsets, offsets) of
+             (True, []) -> return []
+             (True, x:_) ->liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral x
+             _ -> do
                liftIO $ putStrLn "############ Warning: Very ineffecient block body query"
                liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
          let blocks = catMaybes maybeBlocks
