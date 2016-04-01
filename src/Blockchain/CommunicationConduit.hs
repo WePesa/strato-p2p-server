@@ -109,7 +109,7 @@ respondMsgConduit m = do
             [] -> return []
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
                 
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.emptyTriePtr) . blockDataStateRoot . blockBlockData) blocks
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) blocks
          return ()
 
        GetBlockBodies hashes -> do
