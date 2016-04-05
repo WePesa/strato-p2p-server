@@ -11,6 +11,8 @@ module Blockchain.ContextLite (
   runEthCryptMLite,
  -- isDebugEnabled,
   initContextLite,
+  getBlockHeaders,
+  putBlockHeaders,
   addPeer,
   getPeerByIP,
   EthCryptMLite,
@@ -22,6 +24,7 @@ import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Resource
 
+import Blockchain.Data.BlockHeader
 import Blockchain.DBM
 import Blockchain.DB.SQLDB
 import Blockchain.Data.DataDefs
@@ -58,7 +61,8 @@ data ContextLite =
     liteSQLDB::SQLDB,
     notifHandler1::PS.Connection,
     notifHandler2::PS.Connection,
-    debugEnabled::Bool
+    debugEnabled::Bool,
+    blockHeaders::[BlockHeader]
   } deriving Show
 
 
@@ -70,6 +74,16 @@ type ContextMLite = StateT ContextLite (ResourceT IO)
 
 instance HasSQLDB ContextMLite where
   getSQLDB = fmap liteSQLDB get
+
+getBlockHeaders::ContextMLite [BlockHeader]
+getBlockHeaders = do
+  cxt <- get
+  return $ blockHeaders cxt
+
+putBlockHeaders::[BlockHeader]->ContextMLite ()
+putBlockHeaders headers = do
+  cxt <- get
+  put cxt{blockHeaders=headers}
 
 runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
 runEthCryptMLite cxt cState f = do

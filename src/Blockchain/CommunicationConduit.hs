@@ -22,6 +22,8 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe
 
+import qualified Data.Set as S
+
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.BlockHeader
 import Blockchain.Data.RLP
@@ -33,10 +35,13 @@ import Blockchain.Data.BlockOffset
 import Blockchain.Data.DataDefs
 import qualified Blockchain.Database.MerklePatricia as MP
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
+import Blockchain.DB.SQLDB
 import Blockchain.Error
 import Blockchain.Format
 
 import Blockchain.ServOptions
+
+import Blockchain.Util
 
 import Conduit
 import qualified Data.Conduit.Binary as CB
@@ -54,12 +59,24 @@ frontierGenesisHash =
 data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
 data MessageOrNotification = EthMessage Message | Notif RowNotification
 
-isContiguous::(Eq a, Num a)=>[a]->Bool
-isContiguous [] = True
-isContiguous [_] = True
-isContiguous (x:y:rest) | y == x + 1 = isContiguous $ y:rest
-isContiguous _ = False
+setTitleAndProduceBlocks::HasSQLDB m=>[Block]->m Int
+setTitleAndProduceBlocks blocks = do
+  lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
+  let newBlocks = filter (not . (`elem` lastBlockHashes) . blockHash) blocks
+  when (not $ null newBlocks) $ do
+    liftIO $ putStrLn $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
+    --liftIO $ C.setTitle $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
+    _ <- produceBlocks newBlocks
 
+    return ()
+
+  return $ length newBlocks
+
+
+
+maxReturnedHeaders::Int
+maxReturnedHeaders=1000
+  
 respondMsgConduit :: Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit m = do
@@ -93,8 +110,50 @@ respondMsgConduit m = do
          sendMsgConduit Pong
          liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
 
-       NewBlock _ _ -> liftIO $ putStrLn "got a new block packet"
+       NewBlock block' _ -> do
+         lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
+         when (blockDataParentHash (blockBlockData block') `elem` lastBlockHashes) $ do
+           _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
+           return ()
 
+       BlockHeaders headers -> do
+         alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
+         if (null alreadyRequestedHeaders) then do
+           lastBlocks <- liftIO $ fetchLastBlocks 100
+           --liftIO $ putStrLn $ unlines $ map format lastBlocks
+           --liftIO $ putStrLn $ unlines $ map format headers
+           let lastBlockHashes = map blockHash lastBlocks
+           let allHashes = lastBlockHashes ++ map headerHash headers
+               neededParentHashes = map parentHash $ filter ((/= 0) . number) headers
+           when (not $ null $ S.fromList neededParentHashes S.\\ S.fromList allHashes) $ 
+                error "incoming blocks don't seem to have existing parents"
+           let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
+           lift $ lift $ lift $ putBlockHeaders neededHeaders
+           liftIO $ putStrLn $ "putBlockHeaders called with length " ++ show (length neededHeaders)
+           sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
+           else return ()
+           
+       NewBlockHashes _ -> do
+         blockHeaders' <- lift $ lift $ lift getBlockHeaders
+         when (null blockHeaders') $ do
+           lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks 100
+           sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
+         
+       BlockBodies [] -> return ()
+       BlockBodies bodies -> do
+         headers <- lift $ lift $ lift getBlockHeaders
+         --when (length headers /= length bodies) $ error "not enough bodies returned"
+         liftIO $ putStrLn $ "len headers is " ++ show (length headers) ++ ", len bodies is " ++ show (length bodies)
+         newCount <- lift $ lift $ lift $ setTitleAndProduceBlocks $ zipWith createBlockFromHeaderAndBody headers bodies
+         let remainingHeaders = drop (length bodies) headers
+         lift $ lift $ lift $ putBlockHeaders remainingHeaders
+         if null remainingHeaders
+           then 
+             if newCount > 0
+               then sendMsgConduit $ GetBlockHeaders (BlockHash $ headerHash $ last headers) maxReturnedHeaders 0 Forward
+               else return ()
+           else sendMsgConduit $ GetBlockBodies $ map headerHash remainingHeaders
+                
        Transactions _ ->
          sendMsgConduit (Transactions [])
 
@@ -130,7 +189,6 @@ respondMsgConduit m = do
        Disconnect reason ->
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
-       NewBlockHashes _ -> liftIO $ putStrLn "peer sent new block hashes"
        msg -> liftIO $ putStrLn $ "unrecognized message: " ++ show msg
       
 handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
