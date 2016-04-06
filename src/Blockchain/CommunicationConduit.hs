@@ -112,9 +112,11 @@ respondMsgConduit m = do
 
        NewBlock block' _ -> do
          lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
-         when (blockDataParentHash (blockBlockData block') `elem` lastBlockHashes) $ do
-           _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
-           return ()
+         if blockDataParentHash (blockBlockData block') `elem` lastBlockHashes
+           then do
+             _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
+             return ()
+           else syncFetch
 
        BlockHeaders headers -> do
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
@@ -133,11 +135,7 @@ respondMsgConduit m = do
            sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
            else return ()
            
-       NewBlockHashes _ -> do
-         blockHeaders' <- lift $ lift $ lift getBlockHeaders
-         when (null blockHeaders') $ do
-           lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks 100
-           sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
+       NewBlockHashes _ -> syncFetch
          
        BlockBodies [] -> return ()
        BlockBodies bodies -> do
@@ -190,6 +188,18 @@ respondMsgConduit m = do
          liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
 
        msg -> liftIO $ putStrLn $ "unrecognized message: " ++ show msg
+
+
+
+syncFetch::Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+syncFetch = do
+  blockHeaders' <- lift $ lift $ lift getBlockHeaders
+  when (null blockHeaders') $ do
+    lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks 100
+    sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
+         
+
+
       
 handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
                             (ResourceT (EthCryptMLite ContextMLite))
