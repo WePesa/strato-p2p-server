@@ -109,7 +109,8 @@ initContextLite _ = do
                     liteSQLDB = sqlDB' dbs,                    
                     notifHandler1=notif1,
                     notifHandler2=notif2,
-                    debugEnabled = False
+                    debugEnabled = False,
+                    blockHeaders=[]
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
