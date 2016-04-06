@@ -173,7 +173,7 @@ respondMsgConduit m = do
 
        GetBlockBodies hashes -> do
          offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
-         when (length offsets /= length hashes) $ liftIO $ putStrLn $ "########### Warning: peer is asking for blocks I don't have"
+         when (length offsets /= length hashes) $ error $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes)
          maybeBlocks <- 
            case (isContiguous offsets, offsets) of
              (True, []) -> return []
