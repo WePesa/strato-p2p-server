@@ -116,7 +116,9 @@ respondMsgConduit m = do
            then do
              _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
              return ()
-           else syncFetch
+           else do
+             liftIO $ putStrLn "#### New block is missing its parent, I am resyncing"
+             syncFetch
 
        BlockHeaders headers -> do
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
