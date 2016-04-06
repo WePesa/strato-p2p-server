@@ -123,7 +123,7 @@ respondMsgConduit m = do
        BlockHeaders headers -> do
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
-           lastBlocks <- liftIO $ fetchLastBlocks 1000
+           lastBlocks <- liftIO $ fetchLastBlocks 100
            --liftIO $ putStrLn $ unlines $ map format lastBlocks
            --liftIO $ putStrLn $ unlines $ map format headers
            let lastBlockHashes = map blockHash lastBlocks
