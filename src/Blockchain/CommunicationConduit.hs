@@ -217,7 +217,8 @@ handleMsgConduit = awaitForever $ \mn -> do
          sendMsgConduit $ txMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
     (Notif (BlockNotification b d)) -> do
-         liftIO $ putStrLn $ "got new block, maybe should feed it upstream, on row " ++ (show b)
+         liftIO $ putStrLn $ "A new block was inserted in SQL, maybe should feed it upstream" ++
+           tab ("\n" ++ format b)
          let blockMsg = NewBlock b d
          sendMsgConduit $ blockMsg
          liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
