@@ -47,6 +47,10 @@ import qualified Network.Haskoin.Internals as H
 
 import           Data.Bits
 import qualified Database.Persist.Postgresql as SQL
+import System.Log.Logger
+
+
+
 import           Blockchain.Data.DataDefs
 
 import           Blockchain.P2PUtil
@@ -66,12 +70,13 @@ runEthServer connStr myPriv listenPort = do
     liftIO $ createBlockTrigger (notifHandler2 cxt)
     if flags_runUDPServer 
       then do
-        liftIO $ putStrLn "Starting UDP server"
+        liftIO $ errorM "p2pServer" "Starting UDP server"
         _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
         return ()
-      else liftIO $ putStrLn "UDP server disabled"
+      else liftIO $ errorM "p2pServer" "UDP server disabled"
        
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
+      errorM "p2pServer" $ show (appSockAddr app)
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
                             Nothing -> error "peer is nothing after call to getPeerByIP"
@@ -91,9 +96,9 @@ runEthServer connStr myPriv listenPort = do
 
 
         runResourceT $ do 
-          liftIO $ putStrLn "server session starting"
-          (mSource' $$ handleMsgConduit =$= appSink app)
-          liftIO $ putStrLn "server session ended"
+          liftIO $ errorM "p2pServer" "server session starting"
+          (mSource' $$ handleMsgConduit (show $ appSockAddr app) =$= appSink app)
+          liftIO $ errorM "p2pServer" "server session ended"
 
  
 tcpHandshakeServer :: PrivateNumber 

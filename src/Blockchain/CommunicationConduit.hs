@@ -24,6 +24,8 @@ import Data.Maybe
 
 import qualified Data.Set as S
 
+import System.Log.Logger
+
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.BlockHeader
 import Blockchain.Data.RLP
@@ -64,7 +66,7 @@ setTitleAndProduceBlocks blocks = do
   lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
   let newBlocks = filter (not . (`elem` lastBlockHashes) . blockHash) blocks
   when (not $ null newBlocks) $ do
-    liftIO $ putStrLn $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
+    liftIO $ errorM "p2p-server" $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
     --liftIO $ C.setTitle $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
     _ <- produceBlocks newBlocks
 
@@ -77,10 +79,10 @@ setTitleAndProduceBlocks blocks = do
 maxReturnedHeaders::Int
 maxReturnedHeaders=1000
   
-respondMsgConduit :: Message 
+respondMsgConduit :: String->Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
-respondMsgConduit m = do
-   liftIO $ putStrLn $ "<<<<<<<\n" ++ (format m)
+respondMsgConduit peerName m = do
+   liftIO $ errorM "p2p-server" $ "<<<<<<<\n" ++ (format m)
    
    case m of
        Hello{} -> do
@@ -93,7 +95,7 @@ respondMsgConduit m = do
                nodeId = peerId cxt
                }
          sendMsgConduit $ helloMsg
-         liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format helloMsg)
+         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg)
        Status{} -> do
            (h,d) <- lift $ lift $ getBestBlockHash
            genHash <- lift . lift . lift $ getGenesisBlockHash
@@ -105,10 +107,10 @@ respondMsgConduit m = do
                               genesisHash=genHash
                             }
            sendMsgConduit $ statusMsg
-           liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format statusMsg)
+           liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format statusMsg)
        Ping -> do
          sendMsgConduit Pong
-         liftIO $ putStrLn $ ">>>>>>>>>>>\n" ++ (format Pong)
+         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
        NewBlock block' _ -> do
          lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
@@ -117,15 +119,15 @@ respondMsgConduit m = do
              _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
              return ()
            else do
-             liftIO $ putStrLn "#### New block is missing its parent, I am resyncing"
+             liftIO $ errorM "p2p-server" "#### New block is missing its parent, I am resyncing"
              syncFetch
 
        BlockHeaders headers -> do
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
            lastBlocks <- liftIO $ fetchLastBlocks 100
-           --liftIO $ putStrLn $ unlines $ map format lastBlocks
-           --liftIO $ putStrLn $ unlines $ map format headers
+           --liftIO $ errorM "p2p-server" $ unlines $ map format lastBlocks
+           --liftIO $ errorM "p2p-server" $ unlines $ map format headers
            let lastBlockHashes = map blockHash lastBlocks
            let allHashes = lastBlockHashes ++ map headerHash headers
                neededParentHashes = map parentHash $ filter ((/= 0) . number) headers
@@ -134,7 +136,7 @@ respondMsgConduit m = do
                 error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
            let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
            lift $ lift $ lift $ putBlockHeaders neededHeaders
-           liftIO $ putStrLn $ "putBlockHeaders called with length " ++ show (length neededHeaders)
+           liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
            sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
            else return ()
            
@@ -144,7 +146,7 @@ respondMsgConduit m = do
        BlockBodies bodies -> do
          headers <- lift $ lift $ lift getBlockHeaders
          --when (length headers /= length bodies) $ error "not enough bodies returned"
-         liftIO $ putStrLn $ "len headers is " ++ show (length headers) ++ ", len bodies is " ++ show (length bodies)
+         liftIO $ errorM "p2p-server" $ "len headers is " ++ show (length headers) ++ ", len bodies is " ++ show (length bodies)
          newCount <- lift $ lift $ lift $ setTitleAndProduceBlocks $ zipWith createBlockFromHeaderAndBody headers bodies
          let remainingHeaders = drop (length bodies) headers
          lift $ lift $ lift $ putBlockHeaders remainingHeaders
@@ -180,17 +182,17 @@ respondMsgConduit m = do
              (True, []) -> return []
              (True, x:_) ->liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral x
              _ -> do
-               liftIO $ putStrLn "############ Warning: Very ineffecient block body query"
+               liftIO $ errorM "p2p-server" "############ Warning: Very ineffecient block body query"
                liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
          let blocks = catMaybes maybeBlocks
          if (length maybeBlocks == length blocks) 
            then sendMsgConduit $ BlockBodies $ map blockToBody blocks
-           else liftIO $ putStrLn "Peer is asking for block bodies I don't have, I will just ignore the request"
+           else liftIO $ errorM "p2p-server" "Peer is asking for block bodies I don't have, I will just ignore the request"
                 
        Disconnect reason ->
-         liftIO $ putStrLn $ "peer disconnected with reason: " ++ (show reason)
+         liftIO $ errorM "p2p-server" $ "peer disconnected with reason: " ++ (show reason)
 
-       msg -> liftIO $ putStrLn $ "unrecognized message: " ++ show msg
+       msg -> liftIO $ errorM "p2p-server" $ "unrecognized message: " ++ show msg
 
 
 
@@ -204,25 +206,25 @@ syncFetch = do
 
 
       
-handleMsgConduit :: ConduitM MessageOrNotification B.ByteString
+handleMsgConduit :: String->ConduitM MessageOrNotification B.ByteString
                             (ResourceT (EthCryptMLite ContextMLite))
                             ()
 
-handleMsgConduit = awaitForever $ \mn -> do
+handleMsgConduit peerName = awaitForever $ \mn -> do
   case mn of
-    (EthMessage m) -> respondMsgConduit m
+    (EthMessage m) -> respondMsgConduit peerName m
     (Notif (TransactionNotification tx)) -> do
-         liftIO $ putStrLn $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
+         liftIO $ errorM "p2p-server" $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
          let txMsg = Transactions [rawTX2TX tx]
          sendMsgConduit $ txMsg
-         liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format txMsg) 
+         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>> " ++ peerName ++ "\n" ++ (format txMsg) 
     (Notif (BlockNotification b d)) -> do
-         liftIO $ putStrLn $ "A new block was inserted in SQL, maybe should feed it upstream" ++
+         liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
          let blockMsg = NewBlock b d
          sendMsgConduit $ blockMsg
-         liftIO $ putStrLn $ " <handleMsgConduit> >>>>>>>>>>>\n" ++ (format blockMsg) 
---    _ -> liftIO $ putStrLn "got something unexpected in handleMsgConduit"
+         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
+--    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"
 
 sendMsgConduit :: MonadIO m 
                => Message 

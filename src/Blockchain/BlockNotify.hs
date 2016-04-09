@@ -12,6 +12,7 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
 import           Control.Monad
+import System.Log.Logger
 
 import Blockchain.Data.BlockDB
 import Blockchain.Data.DataDefs
@@ -29,7 +30,7 @@ createBlockTrigger conn = do
 \ $p2p_block_notify$ LANGUAGE plpgsql; \n\
 \ CREATE TRIGGER p2p_block_notify AFTER INSERT OR UPDATE ON block_data_ref FOR EACH ROW EXECUTE PROCEDURE p2p_block_notify();"
 
-     putStrLn $ "created trigger with result: " ++ (show res2)
+     errorM "notification" $ "created trigger with result: " ++ (show res2)
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m Block
@@ -42,9 +43,9 @@ blockNotificationSource pool = do
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN p2p_new_block;"
-    liftIO $ putStrLn $ "about to listen for new block notifications"
+    liftIO $ errorM "notification" $ "about to listen for new block notifications"
     rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn
-    liftIO $ putStrLn $ "######## new block has arrived: rowid=" ++ show rowId
+    liftIO $ errorM "notification" $ "######## new block has arrived: rowid=" ++ show rowId
     maybeBlock <- lift $ getBlockFromKey pool rowId
     case maybeBlock of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"

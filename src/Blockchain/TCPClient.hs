@@ -74,7 +74,7 @@ runEthClient connStr myPriv ip port = do
 
       runResourceT $ do
         liftIO $ putStrLn "client session starting"
-        mSource' $$ handleMsgConduit =$= appSink server
+        mSource' $$ handleMsgConduit "-------" =$= appSink server
         liftIO $ putStrLn "client session ended"
  
 tcpHandshakeClient :: PrivateNumber -> Point -> B.ByteString -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite

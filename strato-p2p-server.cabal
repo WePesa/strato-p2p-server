@@ -115,7 +115,8 @@ library
                        split,
                        stm-chans,
                        hflags,
-                       lifted-base
+                       lifted-base,
+                       hslogger
   exposed-modules:
                    Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,

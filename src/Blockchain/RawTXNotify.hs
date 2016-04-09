@@ -12,6 +12,7 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
 import           Control.Monad
+import System.Log.Logger
 
 import Blockchain.Data.RawTransaction
 import Blockchain.DB.SQLDB
@@ -27,7 +28,7 @@ createTXTrigger conn = do
 \ $tx_notify$ LANGUAGE plpgsql; \n\
 \ CREATE TRIGGER tx_notify AFTER INSERT OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
 
-     putStrLn $ "created trigger with result: " ++ (show res2)
+     errorM "txNotification" $ "created trigger with result: " ++ (show res2)
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
@@ -40,9 +41,9 @@ txNotificationSource pool = do
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
-    liftIO $ putStrLn $ "about to listen for raw transaction notifications"
+    liftIO $ errorM "txNotification" $ "about to listen for raw transaction notifications"
     rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn
-    liftIO $ putStrLn $ "########### raw transaction has been added: rowId=" ++ show rowId
+    liftIO $ errorM "txNotification" $ "########### raw transaction has been added: rowId=" ++ show rowId
     maybeTx <- lift $ getTransaction pool rowId
     case maybeTx of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
