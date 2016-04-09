@@ -31,8 +31,14 @@ createTXTrigger conn = do
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
-txNotificationSource::SQLDB->PS.Connection->Source IO RawTransaction
-txNotificationSource pool conn = forever $ do
+txNotificationSource::SQLDB->Source IO RawTransaction
+txNotificationSource pool = do
+  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectPassword = "api",
+    PS.connectDatabase = "eth"
+    }
+
+  forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
     liftIO $ putStrLn $ "about to listen for raw transaction notifications"
     rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn

@@ -33,8 +33,14 @@ createBlockTrigger conn = do
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m Block
-blockNotificationSource::SQLDB->PS.Connection->Source IO (Block, Integer)
-blockNotificationSource pool conn = forever $ do
+blockNotificationSource::SQLDB->Source IO (Block, Integer)
+blockNotificationSource pool = do
+  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectPassword = "api",
+    PS.connectDatabase = "eth"
+    }
+
+  forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN p2p_new_block;"
     liftIO $ putStrLn $ "about to listen for new block notifications"
     rowId <- liftIO $ fmap (SQL.toSqlKey . read . BC.unpack . notificationData) $ getNotification conn
