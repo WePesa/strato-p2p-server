@@ -20,6 +20,7 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.List
 import Data.Maybe
 
 import qualified Data.Set as S
@@ -30,6 +31,7 @@ import qualified Blockchain.AESCTR as AES
 import Blockchain.Data.BlockHeader
 import Blockchain.Data.RLP
 import Blockchain.Data.Wire
+import qualified Blockchain.Colors as C
 import Blockchain.ContextLite
 import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
@@ -78,11 +80,18 @@ setTitleAndProduceBlocks blocks = do
 
 maxReturnedHeaders::Int
 maxReturnedHeaders=1000
-  
+
+format'::Message->String
+format' (BlockHeaders headers) = C.blue "BlockHeaders:" ++ " (" ++ unwords (map (show . number) headers) ++ ")"
+format' x = format x
+
+commaUnwords::[String]->String
+commaUnwords = intercalate ", "
+
 respondMsgConduit :: String->Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit peerName m = do
-   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format m)
+   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' m)
    
    case m of
        Hello{} -> do
@@ -123,6 +132,7 @@ respondMsgConduit peerName m = do
              syncFetch
 
        BlockHeaders headers -> do
+         liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> (show $ number h) ++ " " ++ (take 6 $ format $ headerHash h) ++ "....") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
            lastBlocks <- liftIO $ fetchLastBlocks 100
