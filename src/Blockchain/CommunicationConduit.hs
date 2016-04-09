@@ -82,7 +82,7 @@ maxReturnedHeaders=1000
 respondMsgConduit :: String->Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 respondMsgConduit peerName m = do
-   liftIO $ errorM "p2p-server" $ "<<<<<<<\n" ++ (format m)
+   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format m)
    
    case m of
        Hello{} -> do
