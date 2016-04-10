@@ -152,7 +152,7 @@ respondMsgConduit peerName m = do
                neededParentHashes = map parentHash $ filter ((/= 0) . number) headers
                unfoundParents = S.fromList neededParentHashes S.\\ S.fromList allHashes
            when (not $ null $ S.toList unfoundParents) $ 
-                error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
+                liftIO $ errorM "p2p-server" $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
            let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
