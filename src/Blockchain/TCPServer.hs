@@ -76,7 +76,7 @@ runEthServer connStr myPriv listenPort = do
       else liftIO $ errorM "p2pServer" "UDP server disabled"
        
     liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
-      errorM "p2pServer" $ show (appSockAddr app)
+      errorM "p2pServer" $ "|||| Incoming connection from " ++ show (appSockAddr app)
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
                             Nothing -> error "peer is nothing after call to getPeerByIP"
