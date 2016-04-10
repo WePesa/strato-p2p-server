@@ -195,7 +195,10 @@ respondMsgConduit peerName m = do
 
        GetBlockBodies hashes -> do
          offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
-         when (length offsets /= length hashes) $ error $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes)
+         when (length offsets /= length hashes) $ do
+             liftIO $ errorM "p2p-server" $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes)
+             liftIO $ errorM "p2p-server" $ "########### My block offsets: " ++ unlines (map show offsets)
+             
          maybeBlocks <- 
            case (isContiguous offsets, offsets) of
              (True, []) -> return []
