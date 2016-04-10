@@ -56,7 +56,7 @@ import qualified Data.Conduit.Binary as CB
 ethVersion :: Int
 ethVersion = 61
 
-fetchLimit = 200
+fetchLimit = 50
 
 {-
 frontierGenesisHash :: SHA
@@ -152,7 +152,7 @@ respondMsgConduit peerName m = do
                neededParentHashes = map parentHash $ filter ((/= 0) . number) headers
                unfoundParents = S.fromList neededParentHashes S.\\ S.fromList allHashes
            when (not $ null $ S.toList unfoundParents) $ 
-                liftIO $ errorM "p2p-server" $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
+                error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
            let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
@@ -184,20 +184,23 @@ respondMsgConduit peerName m = do
            case start of
             BlockNumber n -> lift $ lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
             BlockHash h -> lift $ lift $ lift $ getBlockOffsetsForHashes [h]
+
+         liftIO $ errorM "p2p-server" $ "&&&&&&&& offsets: " ++ show blockOffsets
          
          blocks <-
            case blockOffsets of
             [] -> return []
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
-                
+
+         liftIO $ errorM "p2p-server" $ "&&&&&&&&&& blocks: " ++ unlines (map format blocks)
+                               
          sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) blocks
          return ()
 
        GetBlockBodies hashes -> do
          offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
          when (length offsets /= length hashes) $ do
-             liftIO $ errorM "p2p-server" $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes)
-             liftIO $ errorM "p2p-server" $ "########### My block offsets: " ++ unlines (map show offsets)
+             error $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes) ++ "\n########### My block offsets: " ++ unlines (map show offsets)
              
          maybeBlocks <- 
            case (isContiguous offsets, offsets) of
