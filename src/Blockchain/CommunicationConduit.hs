@@ -56,6 +56,8 @@ import qualified Data.Conduit.Binary as CB
 ethVersion :: Int
 ethVersion = 61
 
+fetchLimit = 200
+
 {-
 frontierGenesisHash :: SHA
 frontierGenesisHash =
@@ -69,7 +71,7 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 setTitleAndProduceBlocks::HasSQLDB m=>[Block]->m Int
 setTitleAndProduceBlocks blocks = do
   
-  lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
+  lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
   let newBlocks = filter (not . (`elem` lastBlockHashes) . blockHash) blocks
   when (not $ null newBlocks) $ do
     liftIO $ errorM "p2p-server" $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
@@ -129,7 +131,7 @@ respondMsgConduit peerName m = do
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
        NewBlock block' _ -> do
-         lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
+         lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
          if blockDataParentHash (blockBlockData block') `elem` lastBlockHashes
            then do
              _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
@@ -142,7 +144,7 @@ respondMsgConduit peerName m = do
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
-           lastBlocks <- liftIO $ fetchLastBlocks 100
+           lastBlocks <- liftIO $ fetchLastBlocks fetchLimit
            --liftIO $ errorM "p2p-server" $ unlines $ map format lastBlocks
            --liftIO $ errorM "p2p-server" $ unlines $ map format headers
            let lastBlockHashes = map blockHash lastBlocks
@@ -217,7 +219,7 @@ syncFetch::Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 syncFetch = do
   blockHeaders' <- lift $ lift $ lift getBlockHeaders
   when (null blockHeaders') $ do
-    lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks 100
+    lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks fetchLimit
     sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
          
 
