@@ -25,6 +25,8 @@ import Data.Maybe
 
 import qualified Data.Set as S
 
+import Numeric
+
 import System.Log.Logger
 
 import qualified Blockchain.AESCTR as AES
@@ -42,6 +44,7 @@ import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.DB.SQLDB
 import Blockchain.Error
 import Blockchain.Format
+import Blockchain.SHA
 
 import Blockchain.ServOptions
 
@@ -65,6 +68,7 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 setTitleAndProduceBlocks::HasSQLDB m=>[Block]->m Int
 setTitleAndProduceBlocks blocks = do
+  
   lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks 100
   let newBlocks = filter (not . (`elem` lastBlockHashes) . blockHash) blocks
   when (not $ null newBlocks) $ do
@@ -82,8 +86,11 @@ maxReturnedHeaders::Int
 maxReturnedHeaders=1000
 
 format'::Message->String
-format' (BlockHeaders headers) = C.blue "BlockHeaders:" ++ " (" ++ unwords (map (show . number) headers) ++ ")"
+format' (BlockHeaders headers) = C.blue "BlockHeaders:"
 format' x = format x
+
+shortFormatSHA::SHA->String
+shortFormatSHA (SHA x) = C.yellow $ take 6 $ padZeros 64 $ showHex x ""
 
 commaUnwords::[String]->String
 commaUnwords = intercalate ", "
@@ -132,7 +139,7 @@ respondMsgConduit peerName m = do
              syncFetch
 
        BlockHeaders headers -> do
-         liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> (show $ number h) ++ " " ++ (take 6 $ format $ headerHash h) ++ "....") headers) ++ ")"
+         liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
            lastBlocks <- liftIO $ fetchLastBlocks 100
