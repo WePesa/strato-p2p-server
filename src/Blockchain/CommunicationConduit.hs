@@ -141,10 +141,6 @@ respondMsgConduit peerName m = do
              syncFetch
 
        BlockHeaders headers -> do
-         when (null headers) $ do
-           [theLastBlock] <- liftIO $ fetchLastBlocks 1
-           lift $ lift $ lift $ setSynced $ blockDataNumber $ blockBlockData theLastBlock
-         
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
@@ -158,6 +154,10 @@ respondMsgConduit peerName m = do
            when (not $ null $ S.toList unfoundParents) $ 
                 error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
            let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
+           when (null neededHeaders) $ do
+             [theLastBlock] <- liftIO $ fetchLastBlocks 1
+             lift $ lift $ lift $ setSynced $ blockDataNumber $ blockBlockData theLastBlock
+
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
            sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
