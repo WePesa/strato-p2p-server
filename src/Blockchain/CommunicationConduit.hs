@@ -141,6 +141,10 @@ respondMsgConduit peerName m = do
              syncFetch
 
        BlockHeaders headers -> do
+         when (null headers) $ do
+           [theLastBlock] <- liftIO $ fetchLastBlocks 1
+           lift $ lift $ lift $ setSynced $ blockDataNumber $ blockBlockData theLastBlock
+         
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
          if (null alreadyRequestedHeaders) then do
@@ -185,15 +189,11 @@ respondMsgConduit peerName m = do
             BlockNumber n -> lift $ lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
             BlockHash h -> lift $ lift $ lift $ getOffsetsForHashes [h]
 
-         liftIO $ errorM "p2p-server" $ "&&&&&&&& offsets: " ++ show blockOffsets
-         
          blocks <-
            case blockOffsets of
             [] -> return []
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
 
-         liftIO $ errorM "p2p-server" $ "&&&&&&&&&& blocks: " ++ unlines (map format blocks)
-         
          let blocksWithHashes = map (\b -> (blockHash b, b)) blocks
          existingHashes <- lift $ lift $ lift $ fmap (map blockOffsetHash) $ getBlockOffsetsForHashes $ map fst blocksWithHashes
          let existingBlocks = map snd $ filter ((`elem` existingHashes) . fst) blocksWithHashes
@@ -251,9 +251,14 @@ handleMsgConduit peerName = awaitForever $ \mn -> do
     (Notif (BlockNotification b d)) -> do
          liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
-         let blockMsg = NewBlock b d
-         sendMsgConduit $ blockMsg
-         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
+         maybeSyncedBlock <- lift $ lift $ lift getSyncedBlock
+         case maybeSyncedBlock of
+           Nothing -> return ()
+           Just n ->
+             when (blockDataNumber (blockBlockData b) >= n) $ do
+               let blockMsg = NewBlock b d
+               sendMsgConduit $ blockMsg
+               liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
 --    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"
 
 sendMsgConduit :: MonadIO m 

@@ -13,7 +13,7 @@ module Blockchain.ContextLite (
   initContextLite,
   getBlockHeaders,
   putBlockHeaders,
-  syncedBlock,
+  getSyncedBlock,
   setSynced,
   addPeer,
   getPeerByIP,
@@ -88,8 +88,8 @@ putBlockHeaders headers = do
   cxt <- get
   put cxt{blockHeaders=headers}
 
-syncedBlock::ContextMLite (Maybe Integer)
-syncedBlock = do
+getSyncedBlock::ContextMLite (Maybe Integer)
+getSyncedBlock = do
   cxt <- get
   return $ contextSynced cxt
 
