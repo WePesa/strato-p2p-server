@@ -252,7 +252,8 @@ handleMsgConduit peerName = awaitForever $ \mn -> do
          liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
          maybeSyncedBlock <- lift $ lift $ lift getSyncedBlock
-         case maybeSyncedBlock of
+         let maybeSyncedBlock' = if flags_syncBlock == 0 then Just 0 else maybeSyncedBlock
+         case maybeSyncedBlock' of
            Nothing -> return ()
            Just n ->
              when (blockDataNumber (blockBlockData b) >= n) $ do
