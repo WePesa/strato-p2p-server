@@ -183,7 +183,7 @@ respondMsgConduit peerName m = do
          blockOffsets <-
            case start of
             BlockNumber n -> lift $ lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
-            BlockHash h -> lift $ lift $ lift $ getBlockOffsetsForHashes [h]
+            BlockHash h -> lift $ lift $ lift $ getOffsetsForHashes [h]
 
          liftIO $ errorM "p2p-server" $ "&&&&&&&& offsets: " ++ show blockOffsets
          
@@ -193,12 +193,17 @@ respondMsgConduit peerName m = do
             (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
 
          liftIO $ errorM "p2p-server" $ "&&&&&&&&&& blocks: " ++ unlines (map format blocks)
-                               
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) blocks
+         
+         let blocksWithHashes = map (\b -> (blockHash b, b)) blocks
+         existingHashes <- lift $ lift $ lift $ fmap (map blockOffsetHash) $ getBlockOffsetsForHashes $ map fst blocksWithHashes
+         let existingBlocks = map snd $ filter ((`elem` existingHashes) . fst) blocksWithHashes
+                
+
+         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
          return ()
 
        GetBlockBodies hashes -> do
-         offsets <- lift $ lift $ lift $ getBlockOffsetsForHashes hashes
+         offsets <- lift $ lift $ lift $ getOffsetsForHashes hashes
          when (length offsets /= length hashes) $ do
              error $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes) ++ "\n########### My block offsets: " ++ unlines (map show offsets)
              
