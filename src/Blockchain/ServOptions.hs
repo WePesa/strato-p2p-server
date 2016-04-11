@@ -23,5 +23,6 @@ defineFlag "l:listen" (30303 :: Int) "Listen on port"
 defineFlag "runUDPServer" True "Turn the UDP server on/off"
 defineFlag "networkID" (1::Int) "Turn the UDP server on/off"
 defineFlag "runTCPClient" False "Turn the TCP client on/off"
+defineFlag "syncBlock" (-1::Integer) "Set the syncBlock"
 defineFlag "name" ("Indiana Jones" :: String) "Who to greet."
 

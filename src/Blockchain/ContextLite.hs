@@ -37,6 +37,8 @@ import qualified Crypto.Hash.SHA3 as SHA3
 import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 
+import Blockchain.ServOptions
+
 import           Crypto.Types.PubKey.ECC
 
 import Control.Concurrent.STM
@@ -124,7 +126,7 @@ initContextLite _ = do
                     notifHandler2=notif2,
                     debugEnabled = False,
                     blockHeaders=[],
-                    contextSynced=Nothing
+                    contextSynced=if flags_syncBlock == (-1) then Nothing else Just flags_syncBlock
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
