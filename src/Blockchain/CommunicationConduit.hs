@@ -39,6 +39,7 @@ import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
 import Blockchain.Data.BlockOffset
 import Blockchain.Data.DataDefs
+import Blockchain.Data.NewBlk
 import qualified Blockchain.Database.MerklePatricia as MP
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.DB.SQLDB
@@ -131,6 +132,7 @@ respondMsgConduit peerName m = do
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
        NewBlock block' _ -> do
+         lift $ lift $ lift $ putNewBlk $ blockToNewBlk block'
          lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
          if blockDataParentHash (blockBlockData block') `elem` lastBlockHashes
            then do
