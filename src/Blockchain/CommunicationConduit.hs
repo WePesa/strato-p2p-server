@@ -201,7 +201,7 @@ respondMsgConduit peerName m = do
          let existingBlocks = map snd $ filter ((`elem` existingHashes) . fst) blocksWithHashes
                 
 
-         sendMsgConduit $ BlockHeaders $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
+         sendMsgConduit $ BlockHeaders $ nub $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
          return ()
 
        GetBlockBodies hashes -> do
