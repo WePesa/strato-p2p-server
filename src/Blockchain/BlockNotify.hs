@@ -22,6 +22,7 @@ import Blockchain.Data.NewBlk
 import Blockchain.DB.SQLDB
 import Blockchain.ExtWord
 import Blockchain.SHA
+import Blockchain.EthConf
 
 createBlockTrigger :: PS.Connection -> IO ()
 createBlockTrigger conn = do
@@ -45,9 +46,10 @@ byteStringToSHA s =
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m Block
 blockNotificationSource::SQLDB->Source IO (Block, Integer)
 blockNotificationSource pool = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
 
   forever $ do

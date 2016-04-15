@@ -38,6 +38,7 @@ import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 
 import Blockchain.ServOptions
+import Blockchain.EthConf
 
 import           Crypto.Types.PubKey.ECC
 
@@ -111,13 +112,15 @@ runEthCryptMLite cxt cState f = do
 
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
 initContextLite _ = do
-  notif1 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-            PS.connectPassword = "api",
-            PS.connectDatabase = "eth"
+  notif1 <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class  
+              PS.connectUser = user . sqlConfig $ ethConf,
+              PS.connectPassword = password . sqlConfig $ ethConf,
+              PS.connectDatabase = database . sqlConfig $ ethConf
            }
-  notif2 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-            PS.connectPassword = "api",
-            PS.connectDatabase = "eth"
+  notif2 <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class          
+              PS.connectUser = user . sqlConfig $ ethConf,
+              PS.connectPassword = password . sqlConfig $ ethConf,
+              PS.connectDatabase = database . sqlConfig $ ethConf
            }
   dbs <- openDBs
   return ContextLite {
