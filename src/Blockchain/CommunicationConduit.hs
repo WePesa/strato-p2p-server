@@ -40,6 +40,7 @@ import Blockchain.Data.BlockDB
 import Blockchain.Data.BlockOffset
 import Blockchain.Data.DataDefs
 import Blockchain.Data.NewBlk
+import Blockchain.Data.Transaction
 import qualified Blockchain.Database.MerklePatricia as MP
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.DB.SQLDB
@@ -98,6 +99,12 @@ shortFormatSHA (SHA x) = C.yellow $ take 6 $ padZeros 64 $ showHex x ""
 
 commaUnwords::[String]->String
 commaUnwords = intercalate ", "
+
+filterRequestedBlocks::[SHA]->[Block]->[Block]
+filterRequestedBlocks _ [] = []
+filterRequestedBlocks [] _ = []
+filterRequestedBlocks (h:hRest) (b:bRest) | blockHash b == h = b:filterRequestedBlocks hRest bRest
+filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 
 respondMsgConduit :: String->Message 
                   -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
@@ -207,22 +214,15 @@ respondMsgConduit peerName m = do
          sendMsgConduit $ BlockHeaders $ nub $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
          return ()
 
-       GetBlockBodies hashes -> do
-         offsets <- lift $ lift $ lift $ getOffsetsForHashes hashes
-         when (length offsets /= length hashes) $ do
-             error $ "########### Warning: peer is asking for blocks I don't have: " ++ unlines (map format hashes) ++ "\n########### My block offsets: " ++ unlines (map show offsets)
-             
-         maybeBlocks <- 
-           case (isContiguous offsets, offsets) of
-             (True, []) -> return []
-             (True, x:_) ->liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral x
-             _ -> do
-               liftIO $ errorM "p2p-server" "############ Warning: Very inefficient block body query"
-               liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
-         let blocks = catMaybes maybeBlocks
-         if (length maybeBlocks == length blocks) 
-           then sendMsgConduit $ BlockBodies $ map blockToBody blocks
-           else liftIO $ errorM "p2p-server" "Peer is asking for block bodies I don't have, I will just ignore the request"
+       GetBlockBodies [] -> sendMsgConduit $ BlockBodies []
+       GetBlockBodies headers@(first:rest) -> do
+         offsets <- lift $ lift $ lift $ getOffsetsForHashes [first]
+         case offsets of
+           [] -> error $ "########### Warning: peer is asking for a block I don't have: " ++ format first
+           (o:_) -> do
+             blocks <- liftIO $ fmap (error "Internal error: an offset in SQL points to a value ouside of the block stream.") $ fetchBlocksIO $ fromIntegral o
+             let requestedBlocks = filterRequestedBlocks headers blocks
+             sendMsgConduit $ BlockBodies $ map blockToBody requestedBlocks
                 
        Disconnect reason ->
          liftIO $ errorM "p2p-server" $ "peer disconnected with reason: " ++ (show reason)
