@@ -220,7 +220,7 @@ respondMsgConduit peerName m = do
          case offsets of
            [] -> error $ "########### Warning: peer is asking for a block I don't have: " ++ format first
            (o:_) -> do
-             blocks <- liftIO $ fmap (error "Internal error: an offset in SQL points to a value ouside of the block stream.") $ fetchBlocksIO $ fromIntegral o
+             blocks <- liftIO $ fmap (fromMaybe (error "Internal error: an offset in SQL points to a value ouside of the block stream.")) $ fetchBlocksIO $ fromIntegral o
              let requestedBlocks = filterRequestedBlocks headers blocks
              sendMsgConduit $ BlockBodies $ map blockToBody requestedBlocks
                 
