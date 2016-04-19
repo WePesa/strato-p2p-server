@@ -50,6 +50,7 @@ import Blockchain.SHA
 import Blockchain.ServOptions
 
 import Blockchain.Util
+import Blockchain.Verification
 
 import Conduit
 import qualified Data.Conduit.Binary as CB
@@ -170,6 +171,8 @@ respondMsgConduit peerName m = do
        BlockBodies [] -> return ()
        BlockBodies bodies -> do
          headers <- lift $ lift $ lift getBlockHeaders
+         let verified = and $ zipWith (\h b -> transactionsRoot h == transactionsVerificationValue (fst b)) headers bodies
+         when (not verified) $ error "headers don't match bodies"
          --when (length headers /= length bodies) $ error "not enough bodies returned"
          liftIO $ errorM "p2p-server" $ "len headers is " ++ show (length headers) ++ ", len bodies is " ++ show (length bodies)
          newCount <- lift $ lift $ lift $ setTitleAndProduceBlocks $ zipWith createBlockFromHeaderAndBody headers bodies
