@@ -214,7 +214,7 @@ respondMsgConduit peerName m = do
              (True, []) -> return []
              (True, x:_) ->liftIO $ fmap (map Just . take (length offsets) . fromMaybe []) $ fetchBlocksIO $ fromIntegral x
              _ -> do
-               liftIO $ errorM "p2p-server" "############ Warning: Very ineffecient block body query"
+               liftIO $ errorM "p2p-server" "############ Warning: Very inefficient block body query"
                liftIO $ forM offsets $ fetchBlocksOneIO . fromIntegral
          let blocks = catMaybes maybeBlocks
          if (length maybeBlocks == length blocks) 
