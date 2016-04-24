@@ -14,7 +14,6 @@ import qualified Data.Conduit.Binary as CBN
 import qualified Network.Socket as S
 import           Network.Haskoin.Crypto 
 
-import           Data.Conduit.TMChan
 import           Control.Applicative
 import           Control.Monad
 import           Control.Exception
@@ -28,6 +27,7 @@ import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
 import qualified Blockchain.AESCTR as AES
 import           Blockchain.Handshake
+import           Blockchain.ModTMChan
 import           Blockchain.UDPServer
 import           Blockchain.BlockNotify
 import           Blockchain.RawTXNotify
@@ -85,20 +85,19 @@ runEthServer connStr myPriv listenPort = do
       (_,cState) <-
         appSource app $$+ (tcpHandshakeServer (fromIntegral myPriv) (pPeerPubkey unwrappedPeer)) `fuseUpstream` appSink app
 
-      runEthCryptMLite cxt cState $ do
+      runEthCryptMLite cxt cState $ runResourceT $ do
         let rSource = appSource app
             txSource = txNotificationSource (liteSQLDB cxt) 
                       =$= CL.map (Notif . TransactionNotification)
             blockSource = blockNotificationSource (liteSQLDB cxt) 
                       =$= CL.map (Notif . uncurry BlockNotification)
 
-        mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO blockSource, transPipe liftIO txSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+        mSource' <- mergeSources [rSource =$= recvMsgConduit, blockSource, txSource] 2::(ResourceT (EthCryptMLite ContextMLite)) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
-        runResourceT $ do 
-          liftIO $ errorM "p2pServer" "server session starting"
-          (mSource' $$ handleMsgConduit (show $ appSockAddr app) =$= appSink app)
-          liftIO $ errorM "p2pServer" "server session ended"
+        liftIO $ errorM "p2pServer" "server session starting"
+        (mSource' $$ handleMsgConduit (show $ appSockAddr app) =$= appSink app)
+        liftIO $ errorM "p2pServer" "server session ended"
 
  
 tcpHandshakeServer :: PrivateNumber 

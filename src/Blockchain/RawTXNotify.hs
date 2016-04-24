@@ -12,6 +12,7 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
 import           Control.Monad
+import           Control.Monad.Trans.Resource
 import System.Log.Logger
 
 import Blockchain.Data.RawTransaction
@@ -32,12 +33,15 @@ createTXTrigger conn = do
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
-txNotificationSource::SQLDB->Source IO RawTransaction
+txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m)=>
+                      SQLDB->Source m RawTransaction
 txNotificationSource pool = do
   conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
     PS.connectPassword = "api",
     PS.connectDatabase = "eth"
     }
+
+  register $ PS.close conn
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
@@ -49,7 +53,8 @@ txNotificationSource pool = do
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
      Just tx -> yield tx
 
-getTransaction::SQLDB->SQL.Key RawTransaction->IO (Maybe RawTransaction)
+getTransaction::(MonadIO m, MonadBaseControl IO m, MonadResource m)=>
+                SQLDB->SQL.Key RawTransaction->m (Maybe RawTransaction)
 getTransaction pool row = do
     --pool <- getSQLDB      
     SQL.runSqlPool (SQL.get row) pool

@@ -14,6 +14,7 @@ import qualified Database.PostgreSQL.Simple as PS
 import           Database.PostgreSQL.Simple.Notification
 import           Conduit
 import           Control.Monad
+import           Control.Monad.Trans.Resource
 import System.Log.Logger
 
 import Blockchain.Data.BlockDB
@@ -42,13 +43,16 @@ byteStringToSHA s =
    (s', "") -> SHA $ bytesToWord256 $ B.unpack s'
    _ -> error "byteString in wrong format"
 
---notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m Block
-blockNotificationSource::SQLDB->Source IO (Block, Integer)
+blockNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m)=>SQLDB->Source m (Block, Integer)
+--notificationSource::(MonadBaseControl IO m)=>SQLDB->PS.Connection->Source m Block
+--blockNotificationSource::SQLDB->Source (ResourceT IO) (Block, Integer)
 blockNotificationSource pool = do
   conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
     PS.connectPassword = "api",
     PS.connectDatabase = "eth"
     }
+            
+  register $ PS.close conn
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN p2p_new_block;"
@@ -61,7 +65,7 @@ blockNotificationSource pool = do
      Just (b, difficulty) -> do
        yield (newBlkToBlock b, difficulty)
 
-getBlockFromKey::SQLDB->SHA->IO (Maybe (NewBlk, Integer))
+getBlockFromKey::(MonadIO m, MonadBaseControl IO m)=>SQLDB->SHA->m (Maybe (NewBlk, Integer))
 getBlockFromKey pool hash = do
     --pool <- getSQLDB      
     maybeNewBlk <- SQL.runSqlPool (SQL.getBy $ TheHash hash) pool

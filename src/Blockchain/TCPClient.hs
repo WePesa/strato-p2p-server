@@ -67,7 +67,7 @@ runEthClient connStr myPriv ip port = do
           nSource = txNotificationSource (liteSQLDB cxt)
                     =$= CL.map (Notif . TransactionNotification)
 
-      mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, transPipe liftIO nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
+      mSource' <- runResourceT $ mergeSources [rSource =$= recvMsgConduit, nSource] 2::(EthCryptMLite ContextMLite) (Source (ResourceT (EthCryptMLite ContextMLite)) MessageOrNotification) 
 
 
 --      runResourceT $ mSource' $$ handleMsgConduit  `fuseUpstream` appSink server
