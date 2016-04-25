@@ -139,6 +139,8 @@ respondMsgConduit peerName m = do
          sendMsgConduit Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
+       Transactions txs -> lift $ lift $ lift $ insertTXIfNew txs
+
        NewBlock block' _ -> do
          lift $ lift $ lift $ putNewBlk $ blockToNewBlk block'
          lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
