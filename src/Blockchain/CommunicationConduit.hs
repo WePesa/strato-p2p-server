@@ -242,20 +242,66 @@ syncFetch = do
          
 
 
+awaitMsg::ConduitM MessageOrNotification B.ByteString (ResourceT (EthCryptMLite ContextMLite)) (Maybe MessageOrNotification)
+awaitMsg = do
+  x <- await
+  case x of
+   Just (EthMessage msg) -> return $ Just $ EthMessage msg
+   Nothing -> return Nothing
+   _ -> awaitMsg
+
       
 handleMsgConduit :: String->ConduitM MessageOrNotification B.ByteString
                             (ResourceT (EthCryptMLite ContextMLite))
                             ()
 
-handleMsgConduit peerName = awaitForever $ \mn -> do
-  case mn of
-    (EthMessage m) -> respondMsgConduit peerName m
-    (Notif (TransactionNotification tx)) -> do
+handleMsgConduit peerName = do
+
+  helloMsg <- awaitMsg
+ 
+  case helloMsg of
+   Just (EthMessage (Hello{})) -> do
+         cxt <- lift $ lift $ get
+         let helloMsg =  Hello {
+               version = 4,
+               clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
+               capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
+               port = 0, -- formerly 30303
+               nodeId = peerId cxt
+               }
+         sendMsgConduit $ helloMsg
+         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg)
+   Just (EthMessage _) -> error "Peer communicated before handshake was complete"
+   Nothing -> error "peer hung up before handshake finished"
+
+  statusMsg <- awaitMsg
+
+  case statusMsg of
+   Just (EthMessage (Status{})) -> do
+           (h,d) <- lift $ lift $ getBestBlockHash
+           genHash <- lift . lift . lift $ getGenesisBlockHash
+           let statusMsg = Status{
+                              protocolVersion=fromIntegral ethVersion,
+                              networkID=flags_networkID,
+                              totalDifficulty= fromIntegral $ d,
+                              latestHash=h,
+                              genesisHash=genHash
+                            }
+           sendMsgConduit $ statusMsg
+           liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format statusMsg)
+   Just (EthMessage _) -> error "Peer communicated before handshake was complete"
+   Nothing -> error "peer hung up before handshake finished"
+
+
+  awaitForever $ \mn -> do
+    case mn of
+     (EthMessage m) -> respondMsgConduit peerName m
+     (Notif (TransactionNotification tx)) -> do
          liftIO $ errorM "p2p-server" $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
          let txMsg = Transactions [rawTX2TX tx]
          sendMsgConduit $ txMsg
          liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>> " ++ peerName ++ "\n" ++ (format txMsg) 
-    (Notif (BlockNotification b d)) -> do
+     (Notif (BlockNotification b d)) -> do
          liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
          maybeSyncedBlock <- lift $ lift $ lift getSyncedBlock
