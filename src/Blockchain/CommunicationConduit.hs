@@ -112,29 +112,8 @@ respondMsgConduit peerName m = do
    liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' m)
    
    case m of
-       Hello{} -> do
-         cxt <- lift $ lift $ get
-         let helloMsg =  Hello {
-               version = 4,
-               clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
-               capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
-               port = 0, -- formerly 30303
-               nodeId = peerId cxt
-               }
-         sendMsgConduit $ helloMsg
-         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg)
-       Status{} -> do
-           (h,d) <- lift $ lift $ getBestBlockHash
-           genHash <- lift . lift . lift $ getGenesisBlockHash
-           let statusMsg = Status{
-                              protocolVersion=fromIntegral ethVersion,
-                              networkID=flags_networkID,
-                              totalDifficulty= fromIntegral $ d,
-                              latestHash=h,
-                              genesisHash=genHash
-                            }
-           sendMsgConduit $ statusMsg
-           liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format statusMsg)
+       Hello{} -> error "peer reinitiate the handshake after it has completed"
+       Status{} -> error "peer reinitiating the handshake after it has completed"
        Ping -> do
          sendMsgConduit Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
