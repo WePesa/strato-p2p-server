@@ -122,29 +122,32 @@ respondMsgConduit peerName m = do
 
        NewBlock block' _ -> do
          lift $ lift $ lift $ putNewBlk $ blockToNewBlk block'
-         lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
-         if blockDataParentHash (blockBlockData block') `elem` lastBlockHashes
-           then do
-             _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
-             return ()
-           else do
-             liftIO $ errorM "p2p-server" "#### New block is missing its parent, I am resyncing"
-             syncFetch
+         let parentHash = blockDataParentHash $ blockBlockData block'
+         blockOffsets <- lift $ lift $ lift $ getBlockOffsetsForHashes [parentHash]
+         case blockOffsets of
+          [x] | blockOffsetHash x == parentHash -> do
+                  _ <- lift $ lift $ lift $ setTitleAndProduceBlocks [block']
+                  return ()
+          _ -> do
+            liftIO $ putStrLn "#### New block is missing its parent, I am resyncing"
+            syncFetch
+
+
 
        BlockHeaders headers -> do
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift $ lift $ lift getBlockHeaders
-         if (null alreadyRequestedHeaders) then do
-           lastBlocks <- liftIO $ fetchLastBlocks fetchLimit
-           --liftIO $ errorM "p2p-server" $ unlines $ map format lastBlocks
-           --liftIO $ errorM "p2p-server" $ unlines $ map format headers
-           let lastBlockHashes = map blockHash lastBlocks
-           let allHashes = lastBlockHashes ++ map headerHash headers
-               neededParentHashes = map parentHash $ filter ((/= 0) . number) headers
-               unfoundParents = S.fromList neededParentHashes S.\\ S.fromList allHashes
-           when (not $ null $ S.toList unfoundParents) $ 
-                error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ S.toList unfoundParents) ++ "\n" ++ "New Blocks: " ++ unlines (map format headers)
-           let neededHeaders = filter (not . (`elem` (map blockHash lastBlocks)) . headerHash) headers
+         when (null alreadyRequestedHeaders) $ do
+           let headerHashes = S.fromList $ map headerHash headers
+               neededParentHashes = S.fromList $ map parentHash $ filter ((/= 0) . number) headers
+               allNeeded = headerHashes `S.union` neededParentHashes
+           found <- lift $ lift $ lift $ fmap (S.fromList . map blockOffsetHash) $ getBlockOffsetsForHashes $ S.toList allNeeded
+           let unfoundParents = S.toList $ neededParentHashes S.\\ headerHashes S.\\found
+               
+           when (not $ null unfoundParents) $ do
+             error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ unfoundParents)
+
+           let neededHeaders = filter (not . (`elem` found) . headerHash) headers
            when (null neededHeaders) $ do
              [theLastBlock] <- liftIO $ fetchLastBlocks 1
              lift $ lift $ lift $ setSynced $ blockDataNumber $ blockBlockData theLastBlock
@@ -152,8 +155,7 @@ respondMsgConduit peerName m = do
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
            sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
-           else return ()
-           
+                
        NewBlockHashes _ -> syncFetch
          
        BlockBodies [] -> return ()
