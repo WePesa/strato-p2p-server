@@ -139,7 +139,7 @@ respondMsgConduit peerName m = do
          sendMsgConduit Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
-       Transactions txs -> lift $ lift $ lift $ insertTXIfNew txs
+       Transactions txs -> lift $ lift $ lift $ insertTXIfNew Nothing txs
 
        NewBlock block' _ -> do
          lift $ lift $ lift $ putNewBlk $ blockToNewBlk block'
