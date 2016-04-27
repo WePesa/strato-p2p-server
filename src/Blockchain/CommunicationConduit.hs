@@ -47,6 +47,8 @@ import Blockchain.DB.SQLDB
 import Blockchain.Error
 import Blockchain.Format
 import Blockchain.SHA
+import Blockchain.Stream.UnminedBlock
+import Blockchain.Stream.VMEvent
 
 import Blockchain.ServOptions
 
@@ -74,12 +76,13 @@ data MessageOrNotification = EthMessage Message | Notif RowNotification
 setTitleAndProduceBlocks::HasSQLDB m=>[Block]->m Int
 setTitleAndProduceBlocks blocks = do
   
-  lastBlockHashes <- liftIO $ fmap (map blockHash) $ fetchLastBlocks fetchLimit
+  lastVMEvents <- liftIO $ fetchLastVMEvents fetchLimit
+  let lastBlockHashes = [blockHash b | ChainBlock b <- lastVMEvents]
   let newBlocks = filter (not . (`elem` lastBlockHashes) . blockHash) blocks
   when (not $ null newBlocks) $ do
     liftIO $ errorM "p2p-server" $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
     --liftIO $ C.setTitle $ "Block #" ++ show (maximum $ map (blockDataNumber . blockBlockData) newBlocks)
-    _ <- produceBlocks newBlocks
+    _ <- produceVMEvents $ map ChainBlock newBlocks
 
     return ()
 
@@ -148,9 +151,6 @@ respondMsgConduit peerName m = do
              error $ "incoming blocks don't seem to have existing parents: " ++ unlines (map format $ unfoundParents)
 
            let neededHeaders = filter (not . (`elem` found) . headerHash) headers
-           when (null neededHeaders) $ do
-             [theLastBlock] <- liftIO $ fetchLastBlocks 1
-             lift $ lift $ lift $ setSynced $ blockDataNumber $ blockBlockData theLastBlock
 
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
@@ -187,7 +187,9 @@ respondMsgConduit peerName m = do
          blocks <-
            case blockOffsets of
             [] -> return []
-            (blockOffset:_) -> liftIO $ fmap (fromMaybe []) $ fetchBlocksIO $ fromIntegral blockOffset
+            (blockOffset:_) -> do
+                vmEvents <- liftIO $ fmap (fromMaybe []) $ fetchVMEventsIO $ fromIntegral blockOffset
+                return [b | ChainBlock b <- vmEvents]
 
          let blocksWithHashes = map (\b -> (blockHash b, b)) blocks
          existingHashes <- lift $ lift $ lift $ fmap (map blockOffsetHash) $ getBlockOffsetsForHashes $ map fst blocksWithHashes
@@ -203,7 +205,8 @@ respondMsgConduit peerName m = do
          case offsets of
            [] -> error $ "########### Warning: peer is asking for a block I don't have: " ++ format first
            (o:_) -> do
-             blocks <- liftIO $ fmap (fromMaybe (error "Internal error: an offset in SQL points to a value ouside of the block stream.")) $ fetchBlocksIO $ fromIntegral o
+             vmEvents <- liftIO $ fmap (fromMaybe (error "Internal error: an offset in SQL points to a value ouside of the block stream.")) $ fetchVMEventsIO $ fromIntegral o
+             let blocks = [b | ChainBlock b <- vmEvents]
              let requestedBlocks = filterRequestedBlocks headers blocks
              sendMsgConduit $ BlockBodies $ map blockToBody requestedBlocks
                 
@@ -218,8 +221,13 @@ syncFetch::Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
 syncFetch = do
   blockHeaders' <- lift $ lift $ lift getBlockHeaders
   when (null blockHeaders') $ do
-    lastBlockNumber <- liftIO $ fmap (blockDataNumber . blockBlockData . last) $ fetchLastBlocks fetchLimit
-    sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
+    lastVMEvents <- liftIO $ fetchLastVMEvents fetchLimit
+    case lastVMEvents of
+     [] -> error "syncFetch overflow"
+     x -> do
+       let lastBlocks = [b | ChainBlock b <- x]
+           lastBlockNumber = blockDataNumber . blockBlockData . last $ lastBlocks
+       sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
          
 
 
@@ -285,15 +293,9 @@ handleMsgConduit peerName = do
      (Notif (BlockNotification b d)) -> do
          liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
-         maybeSyncedBlock <- lift $ lift $ lift getSyncedBlock
-         let maybeSyncedBlock' = if flags_syncBlock == 0 then Just 0 else maybeSyncedBlock
-         case maybeSyncedBlock' of
-           Nothing -> return ()
-           Just n ->
-             when (blockDataNumber (blockBlockData b) >= n) $ do
-               let blockMsg = NewBlock b d
-               sendMsgConduit $ blockMsg
-               liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
+         let blockMsg = NewBlock b d
+         sendMsgConduit $ blockMsg
+         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
 --    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"
 
 sendMsgConduit :: MonadIO m 

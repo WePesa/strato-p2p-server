@@ -13,8 +13,6 @@ module Blockchain.ContextLite (
   initContextLite,
   getBlockHeaders,
   putBlockHeaders,
-  getSyncedBlock,
-  setSynced,
   addPeer,
   getPeerByIP,
   EthCryptMLite,
@@ -66,8 +64,7 @@ data ContextLite =
     notifHandler1::PS.Connection,
     notifHandler2::PS.Connection,
     debugEnabled::Bool,
-    blockHeaders::[BlockHeader],
-    contextSynced::Maybe Integer
+    blockHeaders::[BlockHeader]
   } deriving Show
 
 
@@ -89,16 +86,6 @@ putBlockHeaders::[BlockHeader]->ContextMLite ()
 putBlockHeaders headers = do
   cxt <- get
   put cxt{blockHeaders=headers}
-
-getSyncedBlock::ContextMLite (Maybe Integer)
-getSyncedBlock = do
-  cxt <- get
-  return $ contextSynced cxt
-
-setSynced::Integer->ContextMLite ()
-setSynced number = do
-  cxt <- get
-  put cxt{contextSynced=Just number}
 
 runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
 runEthCryptMLite cxt cState f = do
@@ -125,8 +112,7 @@ initContextLite _ = do
                     notifHandler1=notif1,
                     notifHandler2=notif2,
                     debugEnabled = False,
-                    blockHeaders=[],
-                    contextSynced=if flags_syncBlock == (-1) then Nothing else Just flags_syncBlock
+                    blockHeaders=[]
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
