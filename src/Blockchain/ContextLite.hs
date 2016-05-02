@@ -45,15 +45,15 @@ import qualified Data.Text as T
 
 data EthCryptStateLite =
   EthCryptStateLite {
-    encryptState::AES.AESCTRState,
+    peerId::Point
+{-    encryptState::AES.AESCTRState,
     decryptState::AES.AESCTRState,
     egressMAC::SHA3.Ctx,
     ingressMAC::SHA3.Ctx,
     egressKey::B.ByteString,
     ingressKey::B.ByteString,
-    peerId::Point,
     isClient::Bool,
-    afterHello::Bool
+    afterHello::Bool-}
   } 
 
 type EthCryptMLite a = StateT EthCryptStateLite a

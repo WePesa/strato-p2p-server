@@ -23,7 +23,6 @@ import qualified Data.ByteString.Char8 as BC
 import           HFlags
 
 import           Blockchain.TCPServer
-import           Blockchain.TCPClient
 
 import           Blockchain.ServOptions
     
@@ -50,9 +49,6 @@ main = do
 --      myPublic = calculatePublic theCurve (fromIntegral myPriv)
   
   _ <- runResourceT $ do
-          when flags_runTCPClient $ do
-             _ <- async $ (runEthClient connStr myPriv flags_address flags_port)
-             return ()
-          (runEthServer connStr myPriv flags_listen) 
+          runEthServer connStr myPriv flags_listen
   return ()
   

@@ -3,11 +3,11 @@
 
 module Blockchain.CommunicationConduit (
   handleMsgConduit,
-  sendMsgConduit,
-  recvMsgConduit,
+  --sendMsgConduit,
+  --recvMsgConduit,
   MessageOrNotification(..),
-  RowNotification(..),
-  bXor
+  RowNotification(..)
+  --bXor
   ) where
 
 import Control.Monad
@@ -109,8 +109,7 @@ filterRequestedBlocks [] _ = []
 filterRequestedBlocks (h:hRest) (b:bRest) | blockHash b == h = b:filterRequestedBlocks hRest bRest
 filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 
-respondMsgConduit :: String->Message 
-                  -> Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+respondMsgConduit :: String->Message->ConduitM MessageOrNotification Message (ResourceT (EthCryptMLite ContextMLite)) ()
 respondMsgConduit peerName m = do
    liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' m)
    
@@ -118,7 +117,7 @@ respondMsgConduit peerName m = do
        Hello{} -> error "peer reinitiate the handshake after it has completed"
        Status{} -> error "peer reinitiating the handshake after it has completed"
        Ping -> do
-         sendMsgConduit Pong
+         yield Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
        Transactions txs -> lift $ lift $ lift $ insertTXIfNew Nothing txs
@@ -154,7 +153,7 @@ respondMsgConduit peerName m = do
 
            lift $ lift $ lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
-           sendMsgConduit $ GetBlockBodies $ map headerHash neededHeaders
+           yield $ GetBlockBodies $ map headerHash neededHeaders
                 
        NewBlockHashes _ -> syncFetch
          
@@ -171,12 +170,11 @@ respondMsgConduit peerName m = do
          if null remainingHeaders
            then 
              if newCount > 0
-               then sendMsgConduit $ GetBlockHeaders (BlockHash $ headerHash $ last headers) maxReturnedHeaders 0 Forward
+               then yield $ GetBlockHeaders (BlockHash $ headerHash $ last headers) maxReturnedHeaders 0 Forward
                else return ()
-           else sendMsgConduit $ GetBlockBodies $ map headerHash remainingHeaders
+           else yield $ GetBlockBodies $ map headerHash remainingHeaders
                 
-       Transactions _ ->
-         sendMsgConduit (Transactions [])
+       Transactions _ -> yield $ Transactions []
 
        GetBlockHeaders start max' 0 Forward -> do
          blockOffsets <-
@@ -196,10 +194,10 @@ respondMsgConduit peerName m = do
          let existingBlocks = map snd $ filter ((`elem` existingHashes) . fst) blocksWithHashes
                 
 
-         sendMsgConduit $ BlockHeaders $ nub $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
+         yield $ BlockHeaders $ nub $ map blockToBlockHeader  $ take max' $ filter ((/= MP.SHAPtr "") . blockDataStateRoot . blockBlockData) existingBlocks
          return ()
 
-       GetBlockBodies [] -> sendMsgConduit $ BlockBodies []
+       GetBlockBodies [] -> yield $ BlockBodies []
        GetBlockBodies headers@(first:rest) -> do
          offsets <- lift $ lift $ lift $ getOffsetsForHashes [first]
          case offsets of
@@ -208,7 +206,7 @@ respondMsgConduit peerName m = do
              vmEvents <- liftIO $ fmap (fromMaybe (error "Internal error: an offset in SQL points to a value ouside of the block stream.")) $ fetchVMEventsIO $ fromIntegral o
              let blocks = [b | ChainBlock b <- vmEvents]
              let requestedBlocks = filterRequestedBlocks headers blocks
-             sendMsgConduit $ BlockBodies $ map blockToBody requestedBlocks
+             yield $ BlockBodies $ map blockToBody requestedBlocks
                 
        Disconnect reason ->
          liftIO $ errorM "p2p-server" $ "peer disconnected with reason: " ++ (show reason)
@@ -217,7 +215,7 @@ respondMsgConduit peerName m = do
 
 
 
-syncFetch::Producer (ResourceT (EthCryptMLite ContextMLite)) B.ByteString
+syncFetch::ConduitM MessageOrNotification Message (ResourceT (EthCryptMLite ContextMLite)) ()
 syncFetch = do
   blockHeaders' <- lift $ lift $ lift getBlockHeaders
   when (null blockHeaders') $ do
@@ -227,11 +225,11 @@ syncFetch = do
      x -> do
        let lastBlocks = [b | ChainBlock b <- x]
            lastBlockNumber = blockDataNumber . blockBlockData . last $ lastBlocks
-       sendMsgConduit $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
+       yield $ GetBlockHeaders (BlockNumber lastBlockNumber) maxReturnedHeaders 0 Forward
          
 
 
-awaitMsg::ConduitM MessageOrNotification B.ByteString (ResourceT (EthCryptMLite ContextMLite)) (Maybe MessageOrNotification)
+--awaitMsg::ConduitM MessageOrNotification B.ByteString (ResourceT (EthCryptMLite ContextMLite)) (Maybe MessageOrNotification)
 awaitMsg = do
   x <- await
   case x of
@@ -240,7 +238,7 @@ awaitMsg = do
    _ -> awaitMsg
 
       
-handleMsgConduit :: String->ConduitM MessageOrNotification B.ByteString
+handleMsgConduit :: String->ConduitM MessageOrNotification Message
                             (ResourceT (EthCryptMLite ContextMLite))
                             ()
 
@@ -258,7 +256,7 @@ handleMsgConduit peerName = do
                port = 0, -- formerly 30303
                nodeId = peerId cxt
                }
-         sendMsgConduit $ helloMsg
+         yield helloMsg
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg)
    Just (EthMessage _) -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
@@ -276,7 +274,7 @@ handleMsgConduit peerName = do
                               latestHash=h,
                               genesisHash=genHash
                             }
-           sendMsgConduit $ statusMsg
+           yield statusMsg
            liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format statusMsg)
    Just (EthMessage _) -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
@@ -288,16 +286,17 @@ handleMsgConduit peerName = do
      (Notif (TransactionNotification tx)) -> do
          liftIO $ errorM "p2p-server" $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
          let txMsg = Transactions [rawTX2TX tx]
-         sendMsgConduit $ txMsg
+         yield txMsg
          liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>> " ++ peerName ++ "\n" ++ (format txMsg) 
      (Notif (BlockNotification b d)) -> do
          liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
            tab ("\n" ++ format b)
          let blockMsg = NewBlock b d
-         sendMsgConduit $ blockMsg
+         yield blockMsg
          liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
 --    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"
 
+{-
 sendMsgConduit :: MonadIO m 
                => Message 
                -> Producer (ResourceT (EthCryptMLite m)) B.ByteString
@@ -370,6 +369,7 @@ bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y
 bXor x y = error' $
            "bXor called with two ByteStrings of different length: length string1 = " ++
            show (B.length x) ++ ", length string2 = " ++ show (B.length y)
+
 
 encrypt :: MonadIO m
         => B.ByteString
@@ -446,3 +446,4 @@ updateIngressMac value = do
   rawUpdateIngressMac $
     value `bXor` (encryptECB (initAES $ ingressKey cState) (B.take 16 $ SHA3.finalize mac))
 
+-}

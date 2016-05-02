@@ -126,7 +126,6 @@ library
                    Blockchain.P2PUtil,
                    Blockchain.BlockNotify,
                    Blockchain.RawTXNotify,
-                   Blockchain.TCPClient,
                    Blockchain.ServOptions
   other-modules: Blockchain.ModTMChan
   hs-source-dirs:      src
