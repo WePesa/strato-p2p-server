@@ -16,6 +16,7 @@ import Control.Monad.Trans.State
 
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
+import           Crypto.Types.PubKey.ECC
 
 import Data.Bits
 import qualified Data.ByteString as B
@@ -238,11 +239,11 @@ awaitMsg = do
    _ -> awaitMsg
 
       
-handleMsgConduit :: String->ConduitM MessageOrNotification Message
+handleMsgConduit::Point->String->ConduitM MessageOrNotification Message
                             (ResourceT (EthCryptMLite ContextMLite))
                             ()
 
-handleMsgConduit peerName = do
+handleMsgConduit peerId peerName = do
 
   helloMsg <- awaitMsg
  
@@ -254,7 +255,7 @@ handleMsgConduit peerName = do
                clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
                capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
                port = 0, -- formerly 30303
-               nodeId = peerId cxt
+               nodeId = peerId
                }
          yield helloMsg
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg)
