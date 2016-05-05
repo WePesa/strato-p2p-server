@@ -7,7 +7,6 @@ module Blockchain.BlockNotify (
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8 as BC
 import qualified Database.Persist as SQL
 import qualified Database.Persist.Sql as SQL
 import qualified Database.PostgreSQL.Simple as PS
@@ -52,7 +51,7 @@ blockNotificationSource pool = do
     PS.connectDatabase = "eth"
     }
             
-  register $ PS.close conn
+  _ <- register $ PS.close conn
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN p2p_new_block;"
@@ -66,9 +65,9 @@ blockNotificationSource pool = do
        yield (newBlkToBlock b, difficulty)
 
 getBlockFromKey::(MonadIO m, MonadBaseControl IO m)=>SQLDB->SHA->m (Maybe (NewBlk, Integer))
-getBlockFromKey pool hash = do
+getBlockFromKey pool hash' = do
     --pool <- getSQLDB      
-    maybeNewBlk <- SQL.runSqlPool (SQL.getBy $ TheHash hash) pool
+    maybeNewBlk <- SQL.runSqlPool (SQL.getBy $ TheHash hash') pool
     case maybeNewBlk of
      Nothing -> return Nothing
      Just b -> do

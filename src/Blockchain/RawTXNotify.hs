@@ -41,7 +41,7 @@ txNotificationSource pool = do
     PS.connectDatabase = "eth"
     }
 
-  register $ PS.close conn
+  _ <- register $ PS.close conn
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
