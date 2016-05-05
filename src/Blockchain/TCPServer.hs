@@ -80,7 +80,7 @@ runEthServer connStr myPriv listenPort = do
             ethCryptAccept myPriv (pPeerPubkey unwrappedPeer) `fuseUpstream`
             appSink app
 
-      runEthCryptMLite cxt $ runResourceT $ do
+      runEthCryptMLite cxt $ do
         let rSource = appSource app
             txSource = txNotificationSource (liteSQLDB cxt) 
                       =$= CL.map (Notif . TransactionNotification)

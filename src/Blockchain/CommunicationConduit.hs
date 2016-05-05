@@ -1,5 +1,6 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Blockchain.CommunicationConduit (
   handleMsgConduit,
@@ -11,6 +12,7 @@ module Blockchain.CommunicationConduit (
   ) where
 
 import Control.Monad
+import Control.Monad.State
 import Control.Monad.Trans
 
 import           Crypto.Types.PubKey.ECC
@@ -101,7 +103,8 @@ filterRequestedBlocks [] _ = []
 filterRequestedBlocks (h:hRest) (b:bRest) | blockHash b == h = b:filterRequestedBlocks hRest bRest
 filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 
-respondMsgConduit :: String->Message->ConduitM MessageOrNotification Message (ResourceT ContextMLite) ()
+respondMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
+                   String->Message->ConduitM MessageOrNotification Message m ()
 respondMsgConduit peerName m = do
    liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' m)
    
@@ -112,15 +115,15 @@ respondMsgConduit peerName m = do
          yield Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
-       Transactions txs -> lift $ lift $ insertTXIfNew Nothing txs
+       Transactions txs -> lift $ insertTXIfNew Nothing txs
 
        NewBlock block' _ -> do
-         lift $ lift $ putNewBlk $ blockToNewBlk block'
+         lift $ putNewBlk $ blockToNewBlk block'
          let parentHash' = blockDataParentHash $ blockBlockData block'
-         blockOffsets <- lift $ lift $ getBlockOffsetsForHashes [parentHash']
+         blockOffsets <- lift $ getBlockOffsetsForHashes [parentHash']
          case blockOffsets of
           [x] | blockOffsetHash x == parentHash' -> do
-                  _ <- lift $ lift $ setTitleAndProduceBlocks [block']
+                  _ <- lift $ setTitleAndProduceBlocks [block']
                   return ()
           _ -> do
             liftIO $ putStrLn "#### New block is missing its parent, I am resyncing"
@@ -130,12 +133,12 @@ respondMsgConduit peerName m = do
 
        BlockHeaders headers -> do
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
-         alreadyRequestedHeaders <- lift $ lift getBlockHeaders
+         alreadyRequestedHeaders <- lift getBlockHeaders
          when (null alreadyRequestedHeaders) $ do
            let headerHashes = S.fromList $ map headerHash headers
                neededParentHashes = S.fromList $ map parentHash $ filter ((/= 0) . number) headers
                allNeeded = headerHashes `S.union` neededParentHashes
-           found <- lift $ lift $ fmap (S.fromList . map blockOffsetHash) $ getBlockOffsetsForHashes $ S.toList allNeeded
+           found <- lift $ fmap (S.fromList . map blockOffsetHash) $ getBlockOffsetsForHashes $ S.toList allNeeded
            let unfoundParents = S.toList $ neededParentHashes S.\\ headerHashes S.\\found
                
            when (not $ null unfoundParents) $ do
@@ -143,7 +146,7 @@ respondMsgConduit peerName m = do
 
            let neededHeaders = filter (not . (`elem` found) . headerHash) headers
 
-           lift $ lift $ putBlockHeaders neededHeaders
+           lift $ putBlockHeaders neededHeaders
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
            yield $ GetBlockBodies $ map headerHash neededHeaders
                 
@@ -151,14 +154,14 @@ respondMsgConduit peerName m = do
          
        BlockBodies [] -> return ()
        BlockBodies bodies -> do
-         headers <- lift $ lift getBlockHeaders
+         headers <- lift getBlockHeaders
          let verified = and $ zipWith (\h b -> transactionsRoot h == transactionsVerificationValue (fst b)) headers bodies
          when (not verified) $ error "headers don't match bodies"
          --when (length headers /= length bodies) $ error "not enough bodies returned"
          liftIO $ errorM "p2p-server" $ "len headers is " ++ show (length headers) ++ ", len bodies is " ++ show (length bodies)
-         newCount <- lift $ lift $ setTitleAndProduceBlocks $ zipWith createBlockFromHeaderAndBody headers bodies
+         newCount <- lift $ setTitleAndProduceBlocks $ zipWith createBlockFromHeaderAndBody headers bodies
          let remainingHeaders = drop (length bodies) headers
-         lift $ lift $ putBlockHeaders remainingHeaders
+         lift $ putBlockHeaders remainingHeaders
          if null remainingHeaders
            then 
              if newCount > 0
@@ -169,8 +172,8 @@ respondMsgConduit peerName m = do
        GetBlockHeaders start max' 0 Forward -> do
          blockOffsets <-
            case start of
-            BlockNumber n -> lift $ lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
-            BlockHash h -> lift $ lift $ getOffsetsForHashes [h]
+            BlockNumber n -> lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
+            BlockHash h -> lift $ getOffsetsForHashes [h]
 
          blocks <-
            case blockOffsets of
@@ -180,7 +183,7 @@ respondMsgConduit peerName m = do
                 return [b | ChainBlock b <- vmEvents]
 
          let blocksWithHashes = map (\b -> (blockHash b, b)) blocks
-         existingHashes <- lift $ lift $ fmap (map blockOffsetHash) $ getBlockOffsetsForHashes $ map fst blocksWithHashes
+         existingHashes <- lift $ fmap (map blockOffsetHash) $ getBlockOffsetsForHashes $ map fst blocksWithHashes
          let existingBlocks = map snd $ filter ((`elem` existingHashes) . fst) blocksWithHashes
                 
 
@@ -189,7 +192,7 @@ respondMsgConduit peerName m = do
 
        GetBlockBodies [] -> yield $ BlockBodies []
        GetBlockBodies headers@(first:_) -> do
-         offsets <- lift $ lift $ getOffsetsForHashes [first]
+         offsets <- lift $ getOffsetsForHashes [first]
          case offsets of
            [] -> error $ "########### Warning: peer is asking for a block I don't have: " ++ format first
            (o:_) -> do
@@ -205,9 +208,9 @@ respondMsgConduit peerName m = do
 
 
 
-syncFetch::ConduitM MessageOrNotification Message (ResourceT ContextMLite) ()
+syncFetch::(MonadIO m, MonadState ContextLite m)=>ConduitM MessageOrNotification Message m ()
 syncFetch = do
-  blockHeaders' <- lift $ lift getBlockHeaders
+  blockHeaders' <- lift getBlockHeaders
   when (null blockHeaders') $ do
     lastVMEvents <- liftIO $ fetchLastVMEvents fetchLimit
     case lastVMEvents of
@@ -219,7 +222,7 @@ syncFetch = do
          
 
 
-awaitMsg::ConduitM MessageOrNotification Message (ResourceT ContextMLite) (Maybe Message)
+awaitMsg::MonadIO m=>ConduitM MessageOrNotification Message m (Maybe Message)
 awaitMsg = do
   x <- await
   case x of
@@ -228,9 +231,8 @@ awaitMsg = do
    _ -> awaitMsg
 
       
-handleMsgConduit::Point->String->ConduitM MessageOrNotification Message
-                            (ResourceT ContextMLite)
-                            ()
+handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
+                  Point->String->ConduitM MessageOrNotification Message m ()
 
 handleMsgConduit peerId peerName = do
 
@@ -254,8 +256,8 @@ handleMsgConduit peerId peerName = do
 
   case statusMsg of
    Just Status{} -> do
-           (h,d) <- lift $ lift $ getBestBlockHash
-           genHash <- lift . lift $ getGenesisBlockHash
+           (h,d) <- lift getBestBlockHash
+           genHash <- lift getGenesisBlockHash
            let statusMsg' = Status{
                               protocolVersion=fromIntegral ethVersion,
                               networkID=flags_networkID,

@@ -45,12 +45,12 @@ type ContextMLite = StateT ContextLite (ResourceT IO)
 instance HasSQLDB ContextMLite where
   getSQLDB = fmap liteSQLDB get
 
-getBlockHeaders::ContextMLite [BlockHeader]
+getBlockHeaders::MonadState ContextLite m=>m [BlockHeader]
 getBlockHeaders = do
   cxt <- get
   return $ blockHeaders cxt
 
-putBlockHeaders::[BlockHeader]->ContextMLite ()
+putBlockHeaders::MonadState ContextLite m=>[BlockHeader]->m ()
 putBlockHeaders headers = do
   cxt <- get
   put cxt{blockHeaders=headers}
