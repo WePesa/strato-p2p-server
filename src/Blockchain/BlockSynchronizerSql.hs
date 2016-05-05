@@ -23,9 +23,9 @@ import qualified Data.Text as T
 import qualified Database.Persist.Sql as SQL
 import qualified Database.Esqueleto as E
 
-getBestBlockHash :: (EthCryptMLite ContextMLite) (SHA, Integer)
+getBestBlockHash::HasSQLDB m=>m (SHA, Integer)
 getBestBlockHash = do
-  db <- lift $ getSQLDB
+  db <- getSQLDB
   blks <-  E.runSqlPool actions $ db
 
   return $ head $ map (\t -> (blockDataRefHash t, blockDataRefTotalDifficulty t))(map E.entityVal (blks :: [E.Entity BlockDataRef])) 
@@ -36,9 +36,9 @@ getBestBlockHash = do
                        E.orderBy [E.desc (bdRef E.^. BlockDataRefTotalDifficulty)]
                        return bdRef
 
-getBestBlock :: (EthCryptMLite ContextMLite) Block
+getBestBlock::HasSQLDB m=>m Block
 getBestBlock = do
-  db <- lift $ getSQLDB
+  db <- getSQLDB
   blks <-  E.runSqlPool actions $ db
 
   return $ head $ (map E.entityVal (blks :: [E.Entity Block])) 
@@ -50,9 +50,9 @@ getBestBlock = do
                        E.orderBy [E.desc (bdRef E.^. BlockDataRefNumber)]
                        return blk
 
-getBlockHashes :: SHA -> Integer  -> (EthCryptMLite ContextMLite) [SHA]
+getBlockHashes::HasSQLDB m=>SHA->Integer->m [SHA]
 getBlockHashes sha numBlocks = do
-  db <- lift $ getSQLDB
+  db <- getSQLDB
    
   ret <- E.runSqlPool (find sha) $ db
 
@@ -99,12 +99,12 @@ maxBlocks = 512
 shaList2Filter :: (E.Esqueleto query expr backend) =>(expr (E.Entity BlockDataRef), expr (E.Entity Block))-> [SHA] -> expr (E.Value Bool)
 shaList2Filter (bdRef, _) shaList = (foldl1 (E.||.) (map (\sha -> bdRef E.^. BlockDataRefHash E.==. E.val sha) shaList))
 
-handleBlockRequest :: [SHA] -> (EthCryptMLite ContextMLite) [Block]
+handleBlockRequest::HasSQLDB m=>[SHA]->m [Block]
 handleBlockRequest shaList = do
   let len = length shaList
       total = min maxBlocks len
 
-  db <- lift $ getSQLDB      
+  db <- getSQLDB      
   blks <- E.runSqlPool (actions shaList total) $ db
 
   liftIO $ putStrLn $ "serving: " ++ (show total) ++ " blocks "
@@ -119,9 +119,9 @@ handleBlockRequest shaList = do
                        E.orderBy [E.asc (bdr E.^. BlockDataRefNumber)]
                        return blk
 
-getTransactionFromNotif :: Int -> (EthCryptMLite ContextMLite ) [RawTransaction]
+getTransactionFromNotif::HasSQLDB m=>Int->m [RawTransaction]
 getTransactionFromNotif row = do
-    db <- lift $ getSQLDB      
+    db <- getSQLDB      
     tx <- SQL.runSqlPool (actions row) $ db
     return (map SQL.entityVal tx)
 

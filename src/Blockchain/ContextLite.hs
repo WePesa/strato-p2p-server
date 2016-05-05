@@ -14,9 +14,7 @@ module Blockchain.ContextLite (
   getBlockHeaders,
   putBlockHeaders,
   addPeer,
-  getPeerByIP,
-  EthCryptMLite,
-  EthCryptStateLite(..)
+  getPeerByIP
   ) where
 
 
@@ -35,12 +33,6 @@ import qualified Database.PostgreSQL.Simple as PS
 import Control.Concurrent.STM
 
 import qualified Data.Text as T
-
-data EthCryptStateLite =
-  EthCryptStateLite {
-  } 
-
-type EthCryptMLite a = StateT EthCryptStateLite a
 
 data ContextLite =
   ContextLite {
@@ -71,11 +63,10 @@ putBlockHeaders headers = do
   cxt <- get
   put cxt{blockHeaders=headers}
 
-runEthCryptMLite::ContextLite->EthCryptStateLite->EthCryptMLite ContextMLite a->IO ()
-runEthCryptMLite cxt cState f = do
+runEthCryptMLite::ContextLite->ContextMLite a->IO ()
+runEthCryptMLite cxt f = do
   _ <- runResourceT $
        flip runStateT cxt $
-       flip runStateT cState $
        f
   return ()
 
