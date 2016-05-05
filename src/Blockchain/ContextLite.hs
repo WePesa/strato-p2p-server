@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -7,9 +6,7 @@
 module Blockchain.ContextLite (
   ContextLite(..),
   ContextMLite,
-  TContext,
   runEthCryptMLite,
- -- isDebugEnabled,
   initContextLite,
   getBlockHeaders,
   putBlockHeaders,
@@ -30,15 +27,11 @@ import Blockchain.Data.DataDefs
 import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 
-import Control.Concurrent.STM
-
 import qualified Data.Text as T
 
 data ContextLite =
   ContextLite {
     liteSQLDB::SQLDB,
-    notifHandler1::PS.Connection,
-    notifHandler2::PS.Connection,
     debugEnabled::Bool,
     blockHeaders::[BlockHeader]
   } deriving Show
@@ -47,7 +40,6 @@ data ContextLite =
 instance Show PS.Connection where
   show _ = "Postgres Simple Connection"
 
-type TContext = TVar ContextLite
 type ContextMLite = StateT ContextLite (ResourceT IO)
 
 instance HasSQLDB ContextMLite where
@@ -73,19 +65,9 @@ runEthCryptMLite cxt f = do
 
 initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
 initContextLite _ = do
-  notif1 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-            PS.connectPassword = "api",
-            PS.connectDatabase = "eth"
-           }
-  notif2 <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-            PS.connectPassword = "api",
-            PS.connectDatabase = "eth"
-           }
   dbs <- openDBs
   return ContextLite {
                     liteSQLDB = sqlDB' dbs,                    
-                    notifHandler1=notif1,
-                    notifHandler2=notif2,
                     debugEnabled = False,
                     blockHeaders=[]
                  }

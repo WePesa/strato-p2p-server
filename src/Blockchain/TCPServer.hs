@@ -59,8 +59,8 @@ runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m)
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
-    liftIO $ createTXTrigger (notifHandler1 cxt)
-    liftIO $ createBlockTrigger (notifHandler2 cxt)
+    liftIO $ createTXTrigger
+    liftIO $ createBlockTrigger
     if flags_runUDPServer 
       then do
         liftIO $ errorM "p2pServer" "Starting UDP server"

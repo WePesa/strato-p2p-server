@@ -23,9 +23,14 @@ import Blockchain.DB.SQLDB
 import Blockchain.ExtWord
 import Blockchain.SHA
 
-createBlockTrigger :: PS.Connection -> IO ()
-createBlockTrigger conn = do
-     res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON new_blk;\n\
+createBlockTrigger::IO ()
+createBlockTrigger = do
+  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   --TODO add to config
+    PS.connectPassword = "api",
+    PS.connectDatabase = "eth"
+    }
+
+  res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON new_blk;\n\
 \CREATE OR REPLACE FUNCTION p2p_block_notify() RETURNS TRIGGER AS $p2p_block_notify$ \n\ 
     \ BEGIN \n\
     \     PERFORM pg_notify('p2p_new_block', NEW.hash::text ); \n\
@@ -34,7 +39,9 @@ createBlockTrigger conn = do
 \ $p2p_block_notify$ LANGUAGE plpgsql; \n\
 \ CREATE TRIGGER p2p_block_notify AFTER INSERT OR UPDATE ON new_blk FOR EACH ROW EXECUTE PROCEDURE p2p_block_notify();"
 
-     errorM "notification" $ "created trigger with result: " ++ (show res2)
+  PS.close conn
+
+  errorM "notification" $ "created trigger with result: " ++ (show res2)
 
 byteStringToSHA::B.ByteString->SHA
 byteStringToSHA s =

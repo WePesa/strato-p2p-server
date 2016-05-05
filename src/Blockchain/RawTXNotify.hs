@@ -18,9 +18,13 @@ import System.Log.Logger
 import Blockchain.Data.RawTransaction
 import Blockchain.DB.SQLDB
 
-createTXTrigger :: PS.Connection -> IO ()
-createTXTrigger conn = do
-     res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
+createTXTrigger::IO ()
+createTXTrigger = do
+  conn <- PS.connect PS.defaultConnectInfo { --TODO add to configuration file
+    PS.connectPassword = "api",
+    PS.connectDatabase = "eth"
+    }
+  res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\
     \     PERFORM pg_notify('new_transaction', NEW.id::text ); \n\
@@ -29,7 +33,9 @@ createTXTrigger conn = do
 \ $tx_notify$ LANGUAGE plpgsql; \n\
 \ CREATE TRIGGER tx_notify AFTER INSERT OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
 
-     errorM "txNotification" $ "created trigger with result: " ++ (show res2)
+  PS.close conn
+
+  errorM "txNotification" $ "created trigger with result: " ++ (show res2)
 
 
 --notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
