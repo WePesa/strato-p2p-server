@@ -28,16 +28,9 @@ import Blockchain.Data.BlockHeader
 import Blockchain.DBM
 import Blockchain.DB.SQLDB
 import Blockchain.Data.DataDefs
-import qualified Blockchain.AESCTR as AES
 
-import qualified Data.ByteString as B
-import qualified Crypto.Hash.SHA3 as SHA3
 import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS
-
-import Blockchain.ServOptions
-
-import           Crypto.Types.PubKey.ECC
 
 import Control.Concurrent.STM
 
@@ -45,15 +38,6 @@ import qualified Data.Text as T
 
 data EthCryptStateLite =
   EthCryptStateLite {
-    peerId::Point
-{-    encryptState::AES.AESCTRState,
-    decryptState::AES.AESCTRState,
-    egressMAC::SHA3.Ctx,
-    ingressMAC::SHA3.Ctx,
-    egressKey::B.ByteString,
-    ingressKey::B.ByteString,
-    isClient::Bool,
-    afterHello::Bool-}
   } 
 
 type EthCryptMLite a = StateT EthCryptStateLite a

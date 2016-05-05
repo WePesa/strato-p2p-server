@@ -3,35 +3,27 @@
 {-# LANGUAGE FlexibleContexts           #-}
 
 module Blockchain.TCPServer (
-  runEthServer,
-  tcpHandshakeServer  
+  runEthServer
   ) where
 
 import           Conduit
 import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
-import qualified Data.Conduit.Binary as CBN
 import qualified Data.Conduit.Binary as CB
 import qualified Network.Socket as S
-import           Network.Haskoin.Crypto 
 
 import           Control.Applicative
 import           Control.Monad
 import           Control.Exception
 
-import qualified Data.Binary as BN
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import           Blockchain.ExtWord
-import           Blockchain.ExtendedECDSA
 import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
-import qualified Blockchain.AESCTR as AES
 import           Blockchain.Data.RLP
 import           Blockchain.Data.Wire
 import           Blockchain.Frame
-import           Blockchain.Handshake
 import           Blockchain.ModTMChan
 import           Blockchain.UDPServer
 import           Blockchain.BlockNotify
@@ -46,13 +38,7 @@ import           Control.Monad.State
 import           Prelude 
 
 import           Crypto.PubKey.ECC.DH
-import           Crypto.Types.PubKey.ECC
-import           Crypto.Random
-import qualified Crypto.Hash.SHA3 as SHA3
-import           Crypto.Cipher.AES
-import qualified Network.Haskoin.Internals as H
 
-import           Data.Bits
 import qualified Database.Persist.Postgresql as SQL
 import System.Log.Logger
 
@@ -89,12 +75,12 @@ runEthServer connStr myPriv listenPort = do
                             Nothing -> error "peer is nothing after call to getPeerByIP"
                             Just peer' -> peer'
                           
-      (x, (outCxt, inCxt)) <-
+      (_, (outCxt, inCxt)) <-
             appSource app $$+
             ethCryptAccept myPriv (pPeerPubkey unwrappedPeer) `fuseUpstream`
             appSink app
 
-      runEthCryptMLite cxt EthCryptStateLite{peerId=pPeerPubkey unwrappedPeer} $ runResourceT $ do
+      runEthCryptMLite cxt EthCryptStateLite{} $ runResourceT $ do
         let rSource = appSource app
             txSource = txNotificationSource (liteSQLDB cxt) 
                       =$= CL.map (Notif . TransactionNotification)
@@ -164,76 +150,3 @@ messagesToBytes = do
         let (theWord, o) = wireMessage2Obj msg
         yield $ theWord `B.cons` rlpSerialize o
         messagesToBytes
-
---This must exist somewhere already
-tap::MonadIO m=>(a->m ())->Conduit a m a
-tap f = do
-  awaitForever $ \x -> do
-    lift $ f x
-    yield x
-
-                          
-
-tcpHandshakeServer :: PrivateNumber 
-                   -> Point 
-                   -> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
-tcpHandshakeServer prv otherPoint = go
-  where
-  go = do
-    hsBytes <- CBN.take 307
-    
-    let eceisMsgIncoming = (BN.decode $ hsBytes :: ECEISMessage)
-        eceisMsgIBytes = (decryptECEIS prv eceisMsgIncoming )
-        iv = B.replicate 16 0     
-    
-    let SharedKey sharedKey = getShared theCurve prv otherPoint
-        otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
-        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
-        r = bytesToWord256 $ B.unpack $ B.take 32 $ eceisMsgIBytes
-        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eceisMsgIBytes
-        v = head . B.unpack $ B.take 1 $ B.drop 64 eceisMsgIBytes
-        yIsOdd = v == 1
-
-        extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
-        otherEphemeral = hPubKeyToPubKey $ 
-                            fromMaybe (error "malformed signature in tcpHandshakeServer") $ 
-                            getPubKeyFromSignature extSig msg
-
-
-    entropyPool <- liftIO createEntropyPool
-    let g = cprgCreate entropyPool :: SystemRNG
-        (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
-        myEphemeral = calculatePublic theCurve myPriv
-        myNonce = 25 :: Word256 
-        ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False } 
-        eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ BN.encode $ ackMsg )
-        eceisMsgOBytes = BL.toStrict $ BN.encode eceisMsgOutgoing
-            
-    yield $ eceisMsgOBytes
-
-    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
-        ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
-  
-        myNonceBS = B.pack $ word256ToBytes myNonce
-        frameDecKey = otherNonce `add` 
-                        myNonceBS `add` 
-                        (B.pack ephemeralSharedSecretBytes) `add` 
-                        (B.pack ephemeralSharedSecretBytes)
-        macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
-        
-    let cState =
-          EthCryptStateLite {
-            peerId = calculatePublic theCurve prv
-{-            encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-            decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-            egressMAC=SHA3.update (SHA3.init 256) $
-                     (macEncKey `bXor` otherNonce) `B.append` eceisMsgOBytes,
-            egressKey=macEncKey,
-            ingressMAC=SHA3.update (SHA3.init 256) $ 
-                     (macEncKey `bXor` myNonceBS) `B.append` (BL.toStrict hsBytes),
-            ingressKey=macEncKey,
-            isClient = False,
-            afterHello = False -}
-          }
-
-    return cState

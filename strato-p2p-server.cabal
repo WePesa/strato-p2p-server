@@ -85,6 +85,7 @@ library
                        strato-p2p-client,
                        persistent-postgresql,                   
                        resourcet,
+                       milena,
                        mtl,
                        monad-logger,
                        transformers,
