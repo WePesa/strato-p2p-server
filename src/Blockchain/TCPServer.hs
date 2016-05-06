@@ -20,6 +20,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
 import           Blockchain.CommunicationConduit
+import           Blockchain.Context
 import           Blockchain.ContextLite
 import           Blockchain.Data.RLP
 import           Blockchain.Data.Wire
@@ -84,9 +85,9 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt $ do
         let rSource = appSource app
-            txSource = txNotificationSource (liteSQLDB cxt) 
+            txSource = txNotificationSource (contextSQLDB cxt) 
                       =$= CL.map NewTX
-            blockSource = blockNotificationSource (liteSQLDB cxt) 
+            blockSource = blockNotificationSource (contextSQLDB cxt) 
                       =$= CL.map (uncurry NewBL)
 
         eventSource <- mergeSources [

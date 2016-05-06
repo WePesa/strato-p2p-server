@@ -25,7 +25,7 @@ import System.Log.Logger
 import Blockchain.Data.BlockHeader
 import Blockchain.Data.Wire
 import qualified Blockchain.Colors as C
-import Blockchain.ContextLite
+import Blockchain.Context
 import Blockchain.BlockSynchronizerSql
 import Blockchain.Data.BlockDB
 import Blockchain.Data.BlockOffset
@@ -87,7 +87,7 @@ filterRequestedBlocks [] _ = []
 filterRequestedBlocks (h:hRest) (b:bRest) | blockHash b == h = b:filterRequestedBlocks hRest bRest
 filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 
-respondMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
+respondMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m)=>
                    String->Conduit Event m Message
 respondMsgConduit peerName = awaitForever $ \msg -> do
    case msg of
@@ -200,7 +200,7 @@ respondMsgConduit peerName = awaitForever $ \msg -> do
 
 
 
-syncFetch::(MonadIO m, MonadState ContextLite m)=>
+syncFetch::(MonadIO m, MonadState Context m)=>
            Conduit Event m Message
 syncFetch = do
   blockHeaders' <- lift getBlockHeaders
@@ -224,7 +224,7 @@ awaitMsg = do
    _ -> awaitMsg
 
       
-handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
+handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m)=>
                   Point->String->Conduit Event m Message
 
 handleMsgConduit peerId peerName = do

@@ -25,7 +25,8 @@ import           Blockchain.Data.DataDefs
 import           Blockchain.DB.SQLDB
 import           Blockchain.ExtWord
 import           Blockchain.ExtendedECDSA
-import           Blockchain.ContextLite 
+import           Blockchain.Context
+import           Blockchain.ContextLite
 import           Blockchain.P2PUtil
 
 import           Data.Maybe
@@ -37,7 +38,7 @@ import           Crypto.PubKey.ECC.DH
 
 
 
-runEthUDPServer::ContextLite->PrivateNumber->S.Socket->IO ()
+runEthUDPServer::Context->PrivateNumber->S.Socket->IO ()
 runEthUDPServer cxt myPriv socket = do
   _ <- runResourceT $ flip runStateT cxt $ udpHandshakeServer (fromMaybe (error "invalid private nubmer in runEthUDPServer") $ H.makePrvKey $ fromIntegral myPriv) socket
   return ()

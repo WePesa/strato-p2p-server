@@ -4,7 +4,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Blockchain.ContextLite (
-  ContextLite(..),
   ContextMLite,
   runEthCryptMLite,
   initContextLite,
@@ -19,6 +18,7 @@ import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Resource
 
+import Blockchain.Context
 import Blockchain.Data.BlockHeader
 import Blockchain.DBM
 import Blockchain.DB.SQLDB
@@ -29,32 +29,13 @@ import qualified Database.PostgreSQL.Simple as PS
 
 import qualified Data.Text as T
 
-data ContextLite =
-  ContextLite {
-    liteSQLDB::SQLDB,
-    blockHeaders::[BlockHeader]
-  } deriving Show
-
 
 instance Show PS.Connection where
   show _ = "Postgres Simple Connection"
 
-type ContextMLite = StateT ContextLite (ResourceT IO)
+type ContextMLite = StateT Context (ResourceT IO)
 
-instance HasSQLDB ContextMLite where
-  getSQLDB = fmap liteSQLDB get
-
-getBlockHeaders::MonadState ContextLite m=>m [BlockHeader]
-getBlockHeaders = do
-  cxt <- get
-  return $ blockHeaders cxt
-
-putBlockHeaders::MonadState ContextLite m=>[BlockHeader]->m ()
-putBlockHeaders headers = do
-  cxt <- get
-  put cxt{blockHeaders=headers}
-
-runEthCryptMLite::ContextLite->ContextMLite a->IO ()
+runEthCryptMLite::Context->ContextMLite a->IO ()
 runEthCryptMLite cxt f = do
   _ <- runResourceT $
        flip runStateT cxt $
@@ -62,11 +43,11 @@ runEthCryptMLite cxt f = do
   return ()
 
 
-initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m ContextLite
+initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.ConnectionString -> m Context
 initContextLite _ = do
   dbs <- openDBs
-  return ContextLite {
-                    liteSQLDB = sqlDB' dbs,                    
+  return Context {
+                    contextSQLDB = sqlDB' dbs,                    
                     blockHeaders=[]
                  }
 
