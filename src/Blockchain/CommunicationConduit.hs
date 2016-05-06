@@ -70,9 +70,6 @@ setTitleAndProduceBlocks blocks = do
 
 
 
-maxReturnedHeaders::Int
-maxReturnedHeaders=1000
-
 format'::Event->String
 format' (MsgEvt (BlockHeaders _)) = C.blue "BlockHeaders:"
 format' (MsgEvt x) = format x

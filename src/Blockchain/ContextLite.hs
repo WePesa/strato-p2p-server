@@ -32,7 +32,6 @@ import qualified Data.Text as T
 data ContextLite =
   ContextLite {
     liteSQLDB::SQLDB,
-    debugEnabled::Bool,
     blockHeaders::[BlockHeader]
   } deriving Show
 
@@ -68,7 +67,6 @@ initContextLite _ = do
   dbs <- openDBs
   return ContextLite {
                     liteSQLDB = sqlDB' dbs,                    
-                    debugEnabled = False,
                     blockHeaders=[]
                  }
 
