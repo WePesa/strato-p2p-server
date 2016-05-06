@@ -23,6 +23,7 @@ import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
 import           Blockchain.Data.RLP
 import           Blockchain.Data.Wire
+import           Blockchain.Display
 import           Blockchain.Event
 import           Blockchain.Frame
 import           Blockchain.ModTMChan
@@ -93,7 +94,7 @@ runEthServer connStr myPriv listenPort = do
           appSource app =$=
           ethDecrypt inCxt =$=
           transPipe liftIO bytesToMessages =$=
-          -- tap (displayMessage False) =$=
+          transPipe liftIO (tap (displayMessage False (show $ appSockAddr app))) =$=
           CL.map MsgEvt,
           blockSource,
           txSource
@@ -104,7 +105,7 @@ runEthServer connStr myPriv listenPort = do
 
         eventSource =$=
           handleMsgConduit (pPeerPubkey unwrappedPeer) (show $ appSockAddr app) =$=
-          --transPipe liftIO (tap (displayMessage True)) =$=
+          transPipe liftIO (tap (displayMessage True (show $ appSockAddr app))) =$=
           messagesToBytes =$=
           ethEncrypt outCxt $$
           transPipe liftIO (appSink app)

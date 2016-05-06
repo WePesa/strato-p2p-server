@@ -93,14 +93,10 @@ filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 respondMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
                    String->Conduit Event m Message
 respondMsgConduit peerName = awaitForever $ \msg -> do
-   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' msg)
-   
    case msg of
     MsgEvt Hello{} -> error "peer reinitiate the handshake after it has completed"
     MsgEvt Status{} -> error "peer reinitiating the handshake after it has completed"
-    MsgEvt Ping -> do
-         yield Pong
-         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
+    MsgEvt Ping -> yield Pong
 
     MsgEvt (Transactions txs) -> lift $ insertTXIfNew Nothing txs
 
@@ -248,7 +244,6 @@ handleMsgConduit peerId peerName = do
                nodeId = peerId
                }
          yield helloMsg'
-         liftIO $ errorM "p2p-server" $ ">>>>>>>>>>> " ++ peerName ++ "\n" ++ (format helloMsg')
    Just _ -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
 
@@ -266,7 +261,6 @@ handleMsgConduit peerId peerName = do
                               genesisHash=genHash
                             }
            yield statusMsg'
-           liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format statusMsg')
    Just _ -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
 
