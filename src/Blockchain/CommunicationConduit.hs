@@ -3,12 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Blockchain.CommunicationConduit (
-  handleMsgConduit,
-  --sendMsgConduit,
-  --recvMsgConduit,
-  MessageOrNotification(..),
-  RowNotification(..)
-  --bXor
+  handleMsgConduit
   ) where
 
 import Control.Monad
@@ -40,6 +35,7 @@ import Blockchain.Data.Transaction
 import qualified Blockchain.Database.MerklePatricia as MP
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.DB.SQLDB
+import Blockchain.Event
 import Blockchain.Format
 import Blockchain.SHA
 import Blockchain.Stream.VMEvent
@@ -56,16 +52,6 @@ ethVersion = 61
 
 fetchLimit::Offset
 fetchLimit = 50
-
-{-
-frontierGenesisHash :: SHA
-frontierGenesisHash =
-  -- (SHA 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3)
-  SHA 0xc6c980ae0132279535f4d085b9ba2d508ef5d4b19459045f54dac46d797cf3bb
--}
-
-data RowNotification = TransactionNotification RawTransaction | BlockNotification Block Integer
-data MessageOrNotification = EthMessage Message | Notif RowNotification
 
 setTitleAndProduceBlocks::HasSQLDB m=>[Block]->m Int
 setTitleAndProduceBlocks blocks = do
@@ -87,9 +73,10 @@ setTitleAndProduceBlocks blocks = do
 maxReturnedHeaders::Int
 maxReturnedHeaders=1000
 
-format'::Message->String
-format' (BlockHeaders _) = C.blue "BlockHeaders:"
-format' x = format x
+format'::Event->String
+format' (MsgEvt (BlockHeaders _)) = C.blue "BlockHeaders:"
+format' (MsgEvt x) = format x
+format' x = show x
 
 shortFormatSHA::SHA->String
 shortFormatSHA (SHA x) = C.yellow $ take 6 $ padZeros 64 $ showHex x ""
@@ -104,20 +91,20 @@ filterRequestedBlocks (h:hRest) (b:bRest) | blockHash b == h = b:filterRequested
 filterRequestedBlocks hashes (_:bRest) = filterRequestedBlocks hashes bRest
 
 respondMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
-                   String->Message->ConduitM MessageOrNotification Message m ()
-respondMsgConduit peerName m = do
-   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' m)
+                   String->Conduit Event m Message
+respondMsgConduit peerName = awaitForever $ \msg -> do
+   liftIO $ errorM "p2p-server" $ "<<<<<<<" ++ peerName ++ "\n" ++ (format' msg)
    
-   case m of
-       Hello{} -> error "peer reinitiate the handshake after it has completed"
-       Status{} -> error "peer reinitiating the handshake after it has completed"
-       Ping -> do
+   case msg of
+    MsgEvt Hello{} -> error "peer reinitiate the handshake after it has completed"
+    MsgEvt Status{} -> error "peer reinitiating the handshake after it has completed"
+    MsgEvt Ping -> do
          yield Pong
          liftIO $ errorM "p2p-server" $ ">>>>>>>>>>>" ++ peerName ++ "\n" ++ (format Pong)
 
-       Transactions txs -> lift $ insertTXIfNew Nothing txs
+    MsgEvt (Transactions txs) -> lift $ insertTXIfNew Nothing txs
 
-       NewBlock block' _ -> do
+    MsgEvt (NewBlock block' _) -> do
          lift $ putNewBlk $ blockToNewBlk block'
          let parentHash' = blockDataParentHash $ blockBlockData block'
          blockOffsets <- lift $ getBlockOffsetsForHashes [parentHash']
@@ -131,7 +118,7 @@ respondMsgConduit peerName m = do
 
 
 
-       BlockHeaders headers -> do
+    MsgEvt (BlockHeaders headers) -> do
          liftIO $ errorM "p2p-server" $ "(" ++ commaUnwords (map (\h -> "#" ++ (show $ number h) ++ " [" ++ (shortFormatSHA $ headerHash h) ++ "....]") headers) ++ ")"
          alreadyRequestedHeaders <- lift getBlockHeaders
          when (null alreadyRequestedHeaders) $ do
@@ -150,10 +137,10 @@ respondMsgConduit peerName m = do
            liftIO $ errorM "p2p-server" $ "putBlockHeaders called with length " ++ show (length neededHeaders)
            yield $ GetBlockBodies $ map headerHash neededHeaders
                 
-       NewBlockHashes _ -> syncFetch
+    MsgEvt (NewBlockHashes _) -> syncFetch
          
-       BlockBodies [] -> return ()
-       BlockBodies bodies -> do
+    MsgEvt (BlockBodies []) -> return ()
+    MsgEvt (BlockBodies bodies) -> do
          headers <- lift getBlockHeaders
          let verified = and $ zipWith (\h b -> transactionsRoot h == transactionsVerificationValue (fst b)) headers bodies
          when (not verified) $ error "headers don't match bodies"
@@ -169,7 +156,7 @@ respondMsgConduit peerName m = do
                else return ()
            else yield $ GetBlockBodies $ map headerHash remainingHeaders
                 
-       GetBlockHeaders start max' 0 Forward -> do
+    MsgEvt (GetBlockHeaders start max' 0 Forward) -> do
          blockOffsets <-
            case start of
             BlockNumber n -> lift $ fmap (map blockOffsetOffset) $ getBlockOffsetsForNumber $ fromIntegral n
@@ -190,8 +177,8 @@ respondMsgConduit peerName m = do
          yield $ BlockHeaders $ nub $ map blockToBlockHeader  $ take max' $ filter ((/= MP.StateRoot "") . blockDataStateRoot . blockBlockData) existingBlocks
          return ()
 
-       GetBlockBodies [] -> yield $ BlockBodies []
-       GetBlockBodies headers@(first:_) -> do
+    MsgEvt (GetBlockBodies []) -> yield $ BlockBodies []
+    MsgEvt (GetBlockBodies headers@(first:_)) -> do
          offsets <- lift $ getOffsetsForHashes [first]
          case offsets of
            [] -> error $ "########### Warning: peer is asking for a block I don't have: " ++ format first
@@ -201,14 +188,27 @@ respondMsgConduit peerName m = do
              let requestedBlocks = filterRequestedBlocks headers blocks
              yield $ BlockBodies $ map blockToBody requestedBlocks
                 
-       Disconnect reason ->
+    MsgEvt (Disconnect reason) ->
          liftIO $ errorM "p2p-server" $ "peer disconnected with reason: " ++ (show reason)
 
-       msg -> liftIO $ errorM "p2p-server" $ "unrecognized message: " ++ show msg
+    NewTX tx -> do
+           liftIO $ errorM "p2p-server" $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
+           let txMsg = Transactions [rawTX2TX tx]
+           yield txMsg
+           liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>> " ++ peerName ++ "\n" ++ (format txMsg) 
+    NewBL b d -> do
+           liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
+             tab ("\n" ++ format b)
+           yield $ NewBlock b d
+           liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format b) 
+--    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"
+
+    event -> liftIO $ errorM "p2p-server" $ "unrecognized event: " ++ show event
 
 
 
-syncFetch::(MonadIO m, MonadState ContextLite m)=>ConduitM MessageOrNotification Message m ()
+syncFetch::(MonadIO m, MonadState ContextLite m)=>
+           Conduit Event m Message
 syncFetch = do
   blockHeaders' <- lift getBlockHeaders
   when (null blockHeaders') $ do
@@ -222,17 +222,17 @@ syncFetch = do
          
 
 
-awaitMsg::MonadIO m=>ConduitM MessageOrNotification Message m (Maybe Message)
+awaitMsg::MonadIO m=>ConduitM Event Message m (Maybe Message)
 awaitMsg = do
   x <- await
   case x of
-   Just (EthMessage msg) -> return $ Just msg
+   Just (MsgEvt msg) -> return $ Just msg
    Nothing -> return Nothing
    _ -> awaitMsg
 
       
 handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState ContextLite m)=>
-                  Point->String->ConduitM MessageOrNotification Message m ()
+                  Point->String->Conduit Event m Message
 
 handleMsgConduit peerId peerName = do
 
@@ -270,19 +270,5 @@ handleMsgConduit peerId peerName = do
    Just _ -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
 
+  respondMsgConduit peerName
 
-  awaitForever $ \mn -> do
-    case mn of
-     (EthMessage m) -> respondMsgConduit peerName m
-     (Notif (TransactionNotification tx)) -> do
-         liftIO $ errorM "p2p-server" $ "got new transaction, maybe should feed it upstream, on row " ++ (show tx)
-         let txMsg = Transactions [rawTX2TX tx]
-         yield txMsg
-         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>> " ++ peerName ++ "\n" ++ (format txMsg) 
-     (Notif (BlockNotification b d)) -> do
-         liftIO $ errorM "p2p-server" $ "A new block was inserted in SQL, maybe should feed it upstream" ++
-           tab ("\n" ++ format b)
-         let blockMsg = NewBlock b d
-         yield blockMsg
-         liftIO $ errorM "p2p-server" $ " <handleMsgConduit> >>>>>>>>>>>" ++ peerName ++ "\n" ++ (format blockMsg) 
---    _ -> liftIO $ errorM "p2p-server" "got something unexpected in handleMsgConduit"

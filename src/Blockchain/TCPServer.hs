@@ -23,6 +23,7 @@ import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
 import           Blockchain.Data.RLP
 import           Blockchain.Data.Wire
+import           Blockchain.Event
 import           Blockchain.Frame
 import           Blockchain.ModTMChan
 import           Blockchain.UDPServer
@@ -83,9 +84,9 @@ runEthServer connStr myPriv listenPort = do
       runEthCryptMLite cxt $ do
         let rSource = appSource app
             txSource = txNotificationSource (liteSQLDB cxt) 
-                      =$= CL.map (Notif . TransactionNotification)
+                      =$= CL.map NewTX
             blockSource = blockNotificationSource (liteSQLDB cxt) 
-                      =$= CL.map (Notif . uncurry BlockNotification)
+                      =$= CL.map (uncurry NewBL)
 
         eventSource <- mergeSources [
           rSource =$=
@@ -93,7 +94,7 @@ runEthServer connStr myPriv listenPort = do
           ethDecrypt inCxt =$=
           transPipe liftIO bytesToMessages =$=
           -- tap (displayMessage False) =$=
-          CL.map EthMessage,
+          CL.map MsgEvt,
           blockSource,
           txSource
           ] 2
