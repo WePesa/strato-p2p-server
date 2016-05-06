@@ -105,7 +105,7 @@ runEthServer connStr myPriv listenPort = do
         liftIO $ errorM "p2pServer" "server session starting"
 
         eventSource =$=
-          handleMsgConduit (pPeerPubkey unwrappedPeer) (show $ appSockAddr app) =$=
+          handleMsgConduit (pPeerPubkey unwrappedPeer) =$=
           transPipe liftIO (tap (displayMessage True (show $ appSockAddr app))) =$=
           messagesToBytes =$=
           ethEncrypt outCxt $$
