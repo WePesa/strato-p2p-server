@@ -34,5 +34,5 @@ lMain = do
   
 main :: IO ()
 main = do
-  _ <- $initHFlags "The Strato Indexer"
+  _ <- $initHFlags "Strato Peer Server"
   flip runLoggingT printLogMsg lMain
