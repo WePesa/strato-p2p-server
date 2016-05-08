@@ -43,7 +43,7 @@ createBlockTrigger = do
 
   liftIO $ PS.close conn
 
-  logInfoN $ T.pack $ "created trigger with result: " ++ (show res2)
+  logInfoN $ T.pack $ "created trigger with result: " ++ show res2
 
 byteStringToSHA::B.ByteString->SHA
 byteStringToSHA s =
@@ -71,8 +71,7 @@ blockNotificationSource pool = do
     maybeBlock <- lift $ getBlockFromKey pool rowId
     case maybeBlock of
      Nothing -> error "wow, item was removed in notificationSource before I could get it....  This didn't seem like a likely occurence when I was programming, you should probably deal with this possibility now"
-     Just (b, difficulty) -> do
-       yield (newBlkToBlock b, difficulty)
+     Just (b, difficulty) -> yield (newBlkToBlock b, difficulty)
 
 getBlockFromKey::(MonadIO m, MonadBaseControl IO m)=>SQLDB->SHA->m (Maybe (NewBlk, Integer))
 getBlockFromKey pool hash' = do
