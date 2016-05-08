@@ -40,16 +40,18 @@ createTXTrigger = do
   logInfoN $ T.pack $ "created trigger with result: " ++ (show res2)
 
 
---notificationSource::(MonadIO m)=>SQLDB->PS.Connection->Source m RawTransaction
 txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadLogger m, MonadResource m)=>
                       SQLDB->Source m RawTransaction
 txNotificationSource pool = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+  conn <- liftIO $ PS.connect PS.defaultConnectInfo {
     PS.connectPassword = "api",
     PS.connectDatabase = "eth"
     }
 
   _ <- register $ PS.close conn
+
+
+
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"
