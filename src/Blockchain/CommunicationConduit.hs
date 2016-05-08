@@ -7,6 +7,7 @@ module Blockchain.CommunicationConduit (
   ) where
 
 import Conduit
+import Control.Monad.Logger
 import Control.Monad.State
 import Crypto.Types.PubKey.ECC
 
@@ -29,7 +30,7 @@ awaitMsg = do
    Nothing -> return Nothing
    _ -> awaitMsg
       
-handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m)=>
+handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m, MonadLogger m)=>
                   Point->Conduit Event m Message
 handleMsgConduit peerId = do
 
