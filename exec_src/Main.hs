@@ -1,19 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-import           Conduit
-import           Control.Monad
-
-import           Prelude 
-
+import Conduit
+import Control.Monad
+import Control.Monad.Logger
 import qualified Data.ByteString.Char8 as BC
-import           HFlags
-
-import           Blockchain.TCPServer
-
-import           Blockchain.ServOptions
-    
+import qualified Data.Text as T
+import HFlags
 import System.IO
+
+import Blockchain.ServOptions
+import Blockchain.TCPServer
+import Blockchain.Output
 
 connStr :: BC.ByteString
 connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
@@ -21,16 +19,11 @@ connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 privateKey :: Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380
 
-main :: IO ()
-main = do
-  hSetBuffering stdout NoBuffering
-  hSetBuffering stderr NoBuffering
-
-  _ <- $initHFlags "Ethereum p2p"
-  
-  putStrLn $ "connect address: " ++ (flags_address)
-  putStrLn $ "connect port:    " ++ (show flags_port)
-  putStrLn $ "listen port:     " ++ (show flags_listen)
+lMain :: LoggingT IO ()
+lMain = do
+  logInfoN $ T.pack $ "connect address: " ++ (flags_address)
+  logInfoN $ T.pack $ "connect port:    " ++ (show flags_port)
+  logInfoN $ T.pack $ "listen port:     " ++ (show flags_listen)
 
   let myPriv = privateKey
 --      myPublic = calculatePublic theCurve (fromIntegral myPriv)
@@ -39,3 +32,7 @@ main = do
           runEthServer connStr myPriv flags_listen
   return ()
   
+main :: IO ()
+main = do
+  _ <- $initHFlags "The Strato Indexer"
+  flip runLoggingT printLogMsg lMain

@@ -10,10 +10,12 @@ import           Conduit
 import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
 import qualified Data.Conduit.Binary as CB
+import qualified Data.Text as T
 import qualified Network.Socket as S
 
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.Logger
 import           Control.Exception
 
 import qualified Data.ByteString as B
@@ -43,7 +45,6 @@ import           Prelude
 import           Crypto.PubKey.ECC.DH
 
 import qualified Database.Persist.Postgresql as SQL
-import System.Log.Logger
 
 
 
@@ -54,11 +55,8 @@ import           Control.Concurrent.Async.Lifted
 
 import           Blockchain.ServOptions
     
-runEthServer :: (MonadResource m, MonadIO m, MonadBaseControl IO m) 
-             => SQL.ConnectionString     
-             -> PrivateNumber
-             -> Int
-             -> m ()
+runEthServer::(MonadResource m, MonadIO m, MonadBaseControl IO m, MonadLogger m)=>
+              SQL.ConnectionString->PrivateNumber->Int->m ()
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
@@ -66,19 +64,20 @@ runEthServer connStr myPriv listenPort = do
     liftIO $ createBlockTrigger
     if flags_runUDPServer 
       then do
-        liftIO $ errorM "p2pServer" "Starting UDP server"
+        logInfoN "Starting UDP server"
         _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
         return ()
-      else liftIO $ errorM "p2pServer" "UDP server disabled"
+      else logInfoN "UDP server disabled"
        
-    liftIO $ runTCPServer (serverSettings listenPort "*") $ \app -> do
-      errorM "p2pServer" $ "|||| Incoming connection from " ++ show (appSockAddr app)
+    runGeneralTCPServer (serverSettings listenPort "*") $ \app -> do
+      logInfoN $ T.pack $ "|||| Incoming connection from " ++ show (appSockAddr app)
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
                             Nothing -> error "peer is nothing after call to getPeerByIP"
                             Just peer' -> peer'
                           
       (_, (outCxt, inCxt)) <-
+            liftIO $
             appSource app $$+
             ethCryptAccept myPriv (pPeerPubkey unwrappedPeer) `fuseUpstream`
             appSink app
@@ -95,23 +94,23 @@ runEthServer connStr myPriv listenPort = do
           appSource app =$=
           ethDecrypt inCxt =$=
           transPipe liftIO bytesToMessages =$=
-          transPipe liftIO (tap (displayMessage False (show $ appSockAddr app))) =$=
+          transPipe lift (tap (displayMessage False (show $ appSockAddr app))) =$=
           CL.map MsgEvt,
           blockSource,
           txSource
           ] 2
 
 
-        liftIO $ errorM "p2pServer" "server session starting"
+        logInfoN "server session starting"
 
         eventSource =$=
           handleMsgConduit (pPeerPubkey unwrappedPeer) =$=
-          transPipe liftIO (tap (displayMessage True (show $ appSockAddr app))) =$=
+          transPipe lift (tap (displayMessage True (show $ appSockAddr app))) =$=
           messagesToBytes =$=
           ethEncrypt outCxt $$
           transPipe liftIO (appSink app)
 
-        liftIO $ errorM "p2pServer" "server session ended"
+        logInfoN "server session ended"
 
 --cbSafeTake::Monad m=>Int->Consumer B.ByteString m B.ByteString
 cbSafeTake::Monad m=>Int->ConduitM BC.ByteString o m BC.ByteString
