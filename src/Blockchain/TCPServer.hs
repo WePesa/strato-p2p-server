@@ -60,8 +60,8 @@ runEthServer::(MonadResource m, MonadIO m, MonadBaseControl IO m, MonadLogger m)
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
-    liftIO $ createTXTrigger
-    liftIO $ createBlockTrigger
+    createTXTrigger
+    createBlockTrigger
     if flags_runUDPServer 
       then do
         logInfoN "Starting UDP server"
