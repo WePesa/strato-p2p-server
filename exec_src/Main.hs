@@ -10,13 +10,10 @@ import qualified Data.ByteString.Char8 as BC
 import           HFlags
 
 import           Blockchain.TCPServer
-
+import           Blockchain.EthConf
 import           Blockchain.ServOptions
     
 import System.IO
-
-connStr :: BC.ByteString
-connStr = "host=localhost dbname=eth user=postgres password=api port=5432"
 
 privateKey :: Integer
 privateKey =  0xac3e8ce2ef31c3f45d5da860bcd9aee4b37a05c5a3ddee40dd061620c3dab380

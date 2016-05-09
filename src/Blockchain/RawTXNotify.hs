@@ -17,6 +17,7 @@ import System.Log.Logger
 
 import Blockchain.Data.RawTransaction
 import Blockchain.DB.SQLDB
+import Blockchain.EthConf
 
 createTXTrigger::IO ()
 createTXTrigger = do
@@ -42,9 +43,10 @@ createTXTrigger = do
 txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m)=>
                       SQLDB->Source m RawTransaction
 txNotificationSource pool = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
 
   _ <- register $ PS.close conn
