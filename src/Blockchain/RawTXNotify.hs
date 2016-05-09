@@ -21,10 +21,12 @@ import Blockchain.EthConf
 
 createTXTrigger::IO ()
 createTXTrigger = do
-  conn <- PS.connect PS.defaultConnectInfo { --TODO add to configuration file
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
+
   res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\

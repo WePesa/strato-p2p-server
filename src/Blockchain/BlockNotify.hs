@@ -26,9 +26,10 @@ import Blockchain.EthConf
 
 createBlockTrigger::IO ()
 createBlockTrigger = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   --TODO add to config
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
 
   res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON new_blk;\n\
