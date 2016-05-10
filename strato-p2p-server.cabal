@@ -11,6 +11,7 @@ executable strato-p2p-server
   main-is:             Main.hs
   build-depends:       base,
                        blockapps-util,
+                       ethereum-discovery,
                        hflags,
                        monad-logger,
                        strato-p2p-server
@@ -55,7 +56,6 @@ library
                    Blockchain.ContextLite,
                    Blockchain.BlockSynchronizerSql,
                    Blockchain.TCPServer,
-                   Blockchain.UDPServer,
                    Blockchain.P2PUtil,
                    Blockchain.BlockNotify,
                    Blockchain.RawTXNotify,

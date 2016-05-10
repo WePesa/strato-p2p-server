@@ -30,7 +30,6 @@ import           Blockchain.Display
 import           Blockchain.Event
 import           Blockchain.Frame
 import           Blockchain.ModTMChan
-import           Blockchain.UDPServer
 import           Blockchain.BlockNotify
 import           Blockchain.RawTXNotify
 import           Blockchain.RLPx
@@ -62,12 +61,6 @@ runEthServer connStr myPriv listenPort = do
 
     createTXTrigger
     createBlockTrigger
-    if flags_runUDPServer 
-      then do
-        logInfoN "Starting UDP server"
-        _ <- liftIO $ async $ S.withSocketsDo $ bracket (connectMe listenPort) S.sClose (runEthUDPServer cxt myPriv)
-        return ()
-      else logInfoN "UDP server disabled"
        
     runGeneralTCPServer (serverSettings listenPort "*") $ \app -> do
       logInfoN $ T.pack $ "|||| Incoming connection from " ++ show (appSockAddr app)
