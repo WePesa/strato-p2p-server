@@ -1,124 +1,57 @@
 
 name:                strato-p2p-server
 version:             0.1.0.0
--- synopsis:            
--- description:         
 license:             Apache-2.0
 license-file:        LICENSE
--- author:              
--- maintainer:          
--- copyright:           
 category:            Network
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
 
 executable strato-p2p-server
   main-is:             Main.hs
-  -- other-modules:       
-  -- other-extensions:    
   build-depends:       base,
-                       conduit,
-                       conduit-combinators,
-                       conduit-extra,
-                       bytestring,
-                       text,
-                       stm-conduit,
-                       stm,
-                       containers,
-                       word8,
-                       lifted-async,
-                       blockapps-data,
-                       persistent-postgresql,                   
-                       resourcet,
-                       mtl,
-                       monad-logger,
-                       transformers,
-                       persistent,
-                       persistent-template,
-                       esqueleto,
-                       time,
-                       merkle-patricia-db,
-                       ethereum-rlp,
                        blockapps-util,
-                       strato-p2p-server,
-                       base16-bytestring,
-                       strato-p2p-client,
-                       ethereum-encryption,
-                       binary,
-                       binary-conduit,
-                       cipher-aes,
-                       cryptohash,
-                       network,
-                       haskoin,
-                       entropy,
-                       crypto-pubkey, 
-                       crypto-pubkey-types,
-                       crypto-random,
-                       nibblestring,
-                       vector,
-                       IfElse,
-                       postgresql-simple,
-                       split,
-                       stm-chans,
                        hflags,
-                       lifted-base
-
+                       monad-logger,
+                       strato-p2p-server
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
   default-language: Haskell2010      
   
-  
 library
   build-depends:       base,
+                       base16-bytestring,
+                       binary,
                        blockapps-data,
+                       blockapps-util,
+                       bytestring,
                        conduit,
                        conduit-combinators,
                        conduit-extra,
-                       bytestring,
-                       text,
-                       stm-conduit,
-                       stm,
-                       containers,
-                       word8,
-                       lifted-async,
-                       strato-p2p-client,
-                       persistent-postgresql,                   
-                       resourcet,
-                       milena,
-                       mtl,
-                       monad-logger,
-                       transformers,
-                       persistent,
-                       persistent-template,
-                       esqueleto,
-                       time,
-                       merkle-patricia-db,
-                       ethereum-rlp,
-                       blockapps-util,
-                       base16-bytestring,
-                       strato-p2p-client,
-                       ethereum-encryption,
-                       binary,
-                       binary-conduit,
-                       cipher-aes,
-                       cryptohash,
-                       network,
-                       haskoin,
-                       entropy,
-                       crypto-pubkey, 
+                       crypto-pubkey,
                        crypto-pubkey-types,
-                       crypto-random,
-                       nibblestring,
-                       vector,
-                       IfElse,
-                       postgresql-simple,
-                       split,
-                       stm-chans,
+                       cryptohash,
+                       ethereum-encryption,
+                       esqueleto,
+                       ethereum-rlp,
+                       haskoin,
                        hflags,
-                       lifted-base
-  exposed-modules:
-                   Blockchain.CommunicationConduit,
+                       lifted-async,
+                       lifted-base,
+                       monad-logger,
+                       mtl,
+                       network,
+                       persistent,
+                       persistent-postgresql,                   
+                       postgresql-simple,
+                       resourcet,
+                       stm,
+                       stm-conduit,
+                       strato-p2p-client,
+                       text,
+                       time,
+                       transformers
+  exposed-modules: Blockchain.CommunicationConduit,
                    Blockchain.ContextLite,
                    Blockchain.BlockSynchronizerSql,
                    Blockchain.TCPServer,
@@ -127,6 +60,7 @@ library
                    Blockchain.BlockNotify,
                    Blockchain.RawTXNotify,
                    Blockchain.ServOptions
+                   Executable.StratoP2PServer
   other-modules: Blockchain.ModTMChan
   hs-source-dirs:      src
   default-language:    Haskell2010
