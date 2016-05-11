@@ -18,14 +18,17 @@ import Database.PostgreSQL.Simple.Notification
 
 import Blockchain.Data.RawTransaction
 import Blockchain.DB.SQLDB
+import Blockchain.EthConf
 
 createTXTrigger::(MonadIO m, MonadLogger m)=>
                  m ()
 createTXTrigger = do
   conn <- liftIO $ PS.connect PS.defaultConnectInfo { --TODO add to configuration file
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
+
   res2 <- liftIO $ PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
 \CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
     \ BEGIN \n\
@@ -44,8 +47,9 @@ txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadLogger m, MonadRes
                       SQLDB->Source m RawTransaction
 txNotificationSource pool = do
   conn <- liftIO $ PS.connect PS.defaultConnectInfo {
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
 
   _ <- register $ PS.close conn

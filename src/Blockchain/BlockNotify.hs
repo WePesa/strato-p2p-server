@@ -23,13 +23,15 @@ import Blockchain.Data.NewBlk
 import Blockchain.DB.SQLDB
 import Blockchain.ExtWord
 import Blockchain.SHA
+import Blockchain.EthConf
 
 createBlockTrigger::(MonadIO m, MonadLogger m)=>
                     m ()
 createBlockTrigger = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   --TODO add to config
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
 
   res2 <- liftIO $ PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON new_blk;\n\
@@ -56,9 +58,10 @@ blockNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m, Mon
 --notificationSource::(MonadBaseControl IO m)=>SQLDB->PS.Connection->Source m Block
 --blockNotificationSource::SQLDB->Source (ResourceT IO) (Block, Integer)
 blockNotificationSource pool = do
-  conn <- liftIO $ PS.connect PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-    PS.connectPassword = "api",
-    PS.connectDatabase = "eth"
+  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
+    PS.connectUser = user . sqlConfig $ ethConf,
+    PS.connectPassword = password . sqlConfig $ ethConf,
+    PS.connectDatabase = database . sqlConfig $ ethConf
     }
             
   _ <- register $ PS.close conn

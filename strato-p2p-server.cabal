@@ -52,7 +52,8 @@ library
                        text,
                        time,
                        transformers
-  exposed-modules: Blockchain.CommunicationConduit,
+ 
+  exposed-modules:
                    Blockchain.ContextLite,
                    Blockchain.BlockSynchronizerSql,
                    Blockchain.TCPServer,
