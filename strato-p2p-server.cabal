@@ -18,7 +18,25 @@ executable strato-p2p-server
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
   default-language: Haskell2010      
-  
+
+executable strato
+  main-is:             Strato.hs
+  build-depends:       base,
+                       blockapps-util,
+                       ethereum-discovery,
+                       hflags,
+                       monad-logger,
+                       strato-adit,
+                       strato-p2p-client,
+                       strato-p2p-server,
+                       strato-quarry
+                       
+  ghc-options:         -Wall -O2 
+  hs-source-dirs: exec_src
+  default-language: Haskell2010      
+
+
+    
 library
   build-depends:       base,
                        base16-bytestring,
