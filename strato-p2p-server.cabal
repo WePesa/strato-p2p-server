@@ -48,12 +48,14 @@ library
                        resourcet,
                        stm,
                        stm-conduit,
+                       strato-conf,
                        strato-p2p-client,
                        text,
                        time,
                        transformers
  
   exposed-modules:
+                   Blockchain.CommunicationConduit
                    Blockchain.ContextLite,
                    Blockchain.BlockSynchronizerSql,
                    Blockchain.TCPServer,

@@ -49,7 +49,8 @@ initContextLite _ = do
   dbs <- openDBs
   return Context {
                     contextSQLDB = sqlDB' dbs,                    
-                    blockHeaders=[]
+                    blockHeaders=[],
+                    vmTrace=[]
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
