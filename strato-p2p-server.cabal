@@ -24,9 +24,11 @@ executable strato
   build-depends:       base,
                        blockapps-util,
                        ethereum-discovery,
+                       ethereum-vm,
                        hflags,
                        monad-logger,
                        strato-adit,
+                       strato-index,
                        strato-p2p-client,
                        strato-p2p-server,
                        strato-quarry
