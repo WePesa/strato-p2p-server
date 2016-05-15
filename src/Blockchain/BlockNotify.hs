@@ -26,11 +26,7 @@ import Blockchain.EthConf
 
 createBlockTrigger::IO ()
 createBlockTrigger = do
-  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-    PS.connectUser = user . sqlConfig $ ethConf,
-    PS.connectPassword = password . sqlConfig $ ethConf,
-    PS.connectDatabase = database . sqlConfig $ ethConf
-    }
+  conn <- liftIO $ PS.connectPostgreSQL connStr 
 
   res2 <- PS.execute_ conn "DROP TRIGGER IF EXISTS p2p_block_notify ON new_blk;\n\
 \CREATE OR REPLACE FUNCTION p2p_block_notify() RETURNS TRIGGER AS $p2p_block_notify$ \n\ 
@@ -55,12 +51,7 @@ blockNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m)=>SQ
 --notificationSource::(MonadBaseControl IO m)=>SQLDB->PS.Connection->Source m Block
 --blockNotificationSource::SQLDB->Source (ResourceT IO) (Block, Integer)
 blockNotificationSource pool = do
-  conn <- liftIO $ PS.connect $ PS.defaultConnectInfo {   -- bandaid, should eventually be added to monad class
-    PS.connectUser = user . sqlConfig $ ethConf,
-    PS.connectPassword = password . sqlConfig $ ethConf,
-    PS.connectDatabase = database . sqlConfig $ ethConf
-    }
-            
+  conn <- liftIO $ PS.connectPostgreSQL connStr            
   _ <- register $ PS.close conn
 
   forever $ do
