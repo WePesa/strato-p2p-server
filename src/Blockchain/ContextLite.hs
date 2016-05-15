@@ -15,6 +15,7 @@ module Blockchain.ContextLite (
 
 
 import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Resource
 
@@ -33,9 +34,9 @@ import qualified Data.Text as T
 instance Show PS.Connection where
   show _ = "Postgres Simple Connection"
 
-type ContextMLite = StateT Context (ResourceT IO)
+type ContextMLite = StateT Context (ResourceT (LoggingT IO))
 
-runEthCryptMLite::Context->ContextMLite a->IO ()
+--runEthCryptMLite::Context->ContextMLite a->LoggingT IO ()
 runEthCryptMLite cxt f = do
   _ <- runResourceT $
        flip runStateT cxt $
@@ -48,7 +49,8 @@ initContextLite _ = do
   dbs <- openDBs
   return Context {
                     contextSQLDB = sqlDB' dbs,                    
-                    blockHeaders=[]
+                    blockHeaders=[],
+                    vmTrace=[]
                  }
 
 addPeer :: (HasSQLDB m, MonadResource m, MonadBaseControl IO m, MonadThrow m)=>PPeer->m (SQL.Key PPeer)
