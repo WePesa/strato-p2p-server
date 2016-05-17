@@ -20,7 +20,6 @@ import Control.Monad.State
 import Control.Monad.Trans.Resource
 
 import Blockchain.Context
-import Blockchain.Data.BlockHeader
 import Blockchain.DBM
 import Blockchain.DB.SQLDB
 import Blockchain.Data.DataDefs
@@ -37,6 +36,11 @@ instance Show PS.Connection where
 type ContextMLite = StateT Context (ResourceT (LoggingT IO))
 
 --runEthCryptMLite::Context->ContextMLite a->LoggingT IO ()
+
+runEthCryptMLite :: (MonadBaseControl IO m ) 
+                 => s 
+                 -> StateT s (ResourceT m) a 
+                 -> m ()
 runEthCryptMLite cxt f = do
   _ <- runResourceT $
        flip runStateT cxt $
