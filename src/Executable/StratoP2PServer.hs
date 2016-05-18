@@ -6,9 +6,7 @@ module Executable.StratoP2PServer (
 
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
-import HFlags
 
 import Blockchain.EthConf
 import Blockchain.ServOptions

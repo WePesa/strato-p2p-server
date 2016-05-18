@@ -11,12 +11,10 @@ import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Text as T
-import qualified Network.Socket as S
 
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Logger
-import           Control.Exception
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -50,9 +48,7 @@ import qualified Database.Persist.Postgresql as SQL
 import           Blockchain.Data.DataDefs
 
 import           Blockchain.P2PUtil
-import           Control.Concurrent.Async.Lifted
 
-import           Blockchain.ServOptions
     
 runEthServer::(MonadResource m, MonadIO m, MonadBaseControl IO m, MonadLogger m)=>
               SQL.ConnectionString->PrivateNumber->Int->m ()
