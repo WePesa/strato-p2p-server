@@ -4,6 +4,7 @@ import Control.Monad.Logger
 import Control.Concurrent
 import HFlags
 
+import Blockchain.Options
 import Blockchain.Output
 import Blockchain.ServOptions
 import Executable.EthereumDiscovery

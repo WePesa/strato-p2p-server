@@ -6,6 +6,7 @@ import HFlags
 
 -- import Blockchain.IOptions
 -- import Blockchain.Mining.Options
+import Blockchain.ClientOptions
 import Blockchain.Output
 import Blockchain.Options ()
 import Blockchain.Quarry.Flags ()
