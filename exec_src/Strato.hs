@@ -4,8 +4,8 @@ import Control.Monad.Logger
 import Control.Concurrent
 import HFlags
 
--- import Blockchain.IOptions
--- import Blockchain.Mining.Options
+import Blockchain.IOptions ()
+import Blockchain.Mining.Options ()
 import Blockchain.Output
 import Blockchain.Options ()
 import Blockchain.Quarry.Flags ()
@@ -30,13 +30,13 @@ main = do
   if flags_runUDPServer 
     then do
       putStrLn "Starting UDP server"
-      _ <- forkIO $ flip runLoggingT printLogMsg $ ethereumDiscovery flags_listen args
+      _ <- forkIO $ flip runLoggingT (printToFile "logs/etherum-discovery") $ ethereumDiscovery flags_listen args
       return ()
     else putStrLn "UDP server disabled"
 
-  _ <- forkIO $ flip runLoggingT printLogMsg $ stratoQuary
-  _ <- forkIO $ flip runLoggingT printLogMsg $ stratoAdit
-  _ <- forkIO $ flip runLoggingT printLogMsg $ ethereumVM
-  _ <- forkIO $ flip runLoggingT printLogMsg $ stratoIndex
-  _ <- forkIO $ flip runLoggingT printLogMsg $ stratoP2PClient args
-  flip runLoggingT printLogMsg stratoP2PServer
+  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-quary") $ stratoQuary
+  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-adit") $ stratoAdit
+  _ <- forkIO $ flip runLoggingT (printToFile "logs/etherum-vm") $ ethereumVM
+  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-index") $ stratoIndex
+  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-p2p-client") $ stratoP2PClient args
+  flip runLoggingT (printToFile "logs/strato-p2p-server") stratoP2PServer
