@@ -31,7 +31,8 @@ executable strato
                        strato-index,
                        strato-p2p-client,
                        strato-p2p-server,
-                       strato-quarry
+                       strato-quarry,
+                       transformers
                        
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src

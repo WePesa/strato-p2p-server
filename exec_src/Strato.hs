@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 
+import Control.Monad.IO.Class
 import Control.Monad.Logger
 import Control.Concurrent
 import HFlags
@@ -21,7 +22,11 @@ import Executable.StratoP2PServer
 import Executable.StratoQuary
 
 
+run::FilePath->LoggingT IO ()->IO ()
+run logPath f = forkIO (runNoFork logPath f) >> return ()
 
+runNoFork::FilePath->LoggingT IO ()->IO ()
+runNoFork logPath f = runLoggingT f $ printToFile logPath
 
 main :: IO ()
 main = do
@@ -34,9 +39,9 @@ main = do
       return ()
     else putStrLn "UDP server disabled"
 
-  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-quary") $ stratoQuary
-  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-adit") $ stratoAdit
-  _ <- forkIO $ flip runLoggingT (printToFile "logs/etherum-vm") $ ethereumVM
-  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-index") $ stratoIndex
-  _ <- forkIO $ flip runLoggingT (printToFile "logs/strato-p2p-client") $ stratoP2PClient args
-  flip runLoggingT (printToFile "logs/strato-p2p-server") stratoP2PServer
+  run "logs/strato-quarry" stratoQuary
+  run "logs/strato-adit" stratoAdit
+  run "logs/etherum-vm" ethereumVM
+  run "logs/strato-index" stratoIndex
+  run "logs/strato-p2p-client" $ stratoP2PClient args
+  runNoFork "logs/strato-p2p-server" stratoP2PServer
