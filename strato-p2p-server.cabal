@@ -23,6 +23,7 @@ executable strato
   main-is:             Strato.hs
   build-depends:       base,
                        blockapps-util,
+                       directory,
                        ethereum-discovery,
                        ethereum-vm,
                        hflags,
@@ -32,7 +33,8 @@ executable strato
                        strato-p2p-client,
                        strato-p2p-server,
                        strato-quarry,
-                       transformers
+                       transformers,
+                       unix
                        
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
