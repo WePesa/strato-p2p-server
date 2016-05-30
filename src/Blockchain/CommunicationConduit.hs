@@ -11,6 +11,8 @@ import Control.Monad.Logger
 import Control.Monad.State
 import Crypto.Types.PubKey.ECC
 
+import Blockchain.Data.DataDefs
+import Blockchain.Data.Peer
 import Blockchain.Data.Wire
 import Blockchain.Context
 import Blockchain.BlockSynchronizerSql
@@ -31,8 +33,8 @@ awaitMsg = do
    _ -> awaitMsg
       
 handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m, MonadLogger m)=>
-                  Point->Conduit Event m Message
-handleMsgConduit peerId = do
+                  PPeer->Conduit Event m Message
+handleMsgConduit peer = do
 
   helloMsg <- awaitMsg
  
@@ -43,7 +45,7 @@ handleMsgConduit peerId = do
                clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
                capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
                port = 0, -- formerly 30303
-               nodeId = peerId
+               nodeId = pPeerPubkey peer
                }
          yield helloMsg'
    Just _ -> error "Peer communicated before handshake was complete"
@@ -66,5 +68,5 @@ handleMsgConduit peerId = do
    Just _ -> error "Peer communicated before handshake was complete"
    Nothing -> error "peer hung up before handshake finished"
 
-  handleEvents
+  handleEvents peer
 

@@ -93,7 +93,7 @@ runEthServer connStr myPriv listenPort = do
         logInfoN "server session starting"
 
         eventSource =$=
-          handleMsgConduit (pPeerPubkey unwrappedPeer) =$=
+          handleMsgConduit unwrappedPeer =$=
           transPipe lift (tap (displayMessage True (show $ appSockAddr app))) =$=
           messagesToBytes =$=
           ethEncrypt outCxt $$
