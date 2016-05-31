@@ -33,8 +33,8 @@ awaitMsg = do
    _ -> awaitMsg
       
 handleMsgConduit::(MonadIO m, MonadResource m, HasSQLDB m, MonadState Context m, MonadLogger m)=>
-                  PPeer->Conduit Event m Message
-handleMsgConduit peer = do
+                  Point->PPeer->Conduit Event m Message
+handleMsgConduit myPubkey peer = do
 
   helloMsg <- awaitMsg
  
@@ -45,7 +45,7 @@ handleMsgConduit peer = do
                clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
                capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
                port = 0, -- formerly 30303
-               nodeId = pPeerPubkey peer
+               nodeId = myPubkey
                }
          yield helloMsg'
    Just _ -> error "Peer communicated before handshake was complete"

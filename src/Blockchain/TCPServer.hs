@@ -12,6 +12,8 @@ import           Data.Conduit.Network
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Text as T
 
+import Crypto.Types.PubKey.ECC
+
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Logger
@@ -49,11 +51,16 @@ import           Blockchain.Data.DataDefs
 
 import           Blockchain.P2PUtil
 
-    
+               
+theCurve::Curve
+theCurve = getCurveByName SEC_p256k1
+
 runEthServer::(MonadResource m, MonadIO m, MonadBaseControl IO m, MonadLogger m)=>
               SQL.ConnectionString->PrivateNumber->Int->m ()
 runEthServer connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
+
+    let myPubkey = calculatePublic theCurve myPriv
 
     createTXTrigger
     createBlockTrigger
@@ -93,7 +100,7 @@ runEthServer connStr myPriv listenPort = do
         logInfoN "server session starting"
 
         eventSource =$=
-          handleMsgConduit unwrappedPeer =$=
+          handleMsgConduit myPubkey unwrappedPeer =$=
           transPipe lift (tap (displayMessage True (show $ appSockAddr app))) =$=
           messagesToBytes =$=
           ethEncrypt outCxt $$
