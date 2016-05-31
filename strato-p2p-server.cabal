@@ -72,7 +72,11 @@ library
                        strato-p2p-client,
                        text,
                        time,
-                       transformers
+                       transformers,
+                       servant-server,
+                       wai, 
+                       warp,
+                       aeson
  
   exposed-modules:
                    Blockchain.CommunicationConduit
@@ -82,9 +86,14 @@ library
                    Blockchain.P2PUtil,
                    Blockchain.BlockNotify,
                    Blockchain.RawTXNotify,
-                   Blockchain.ServOptions
-                   Executable.StratoP2PServer
-  other-modules: Blockchain.ModTMChan
+                   Blockchain.ServOptions,
+                   Executable.StratoP2PServer,
+                   API.StratoP2PServer
+  other-modules: Blockchain.ModTMChan,
+                 API.Handler.Status,
+                 API.Model.Status,
+                 API.Route.Status
+
   hs-source-dirs:      src
   default-language:    Haskell2010
 
