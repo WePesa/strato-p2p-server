@@ -12,7 +12,6 @@ import Control.Monad.State
 import Crypto.Types.PubKey.ECC
 
 import Blockchain.Data.DataDefs
-import Blockchain.Data.Peer
 import Blockchain.Data.Wire
 import Blockchain.Context
 import Blockchain.BlockSynchronizerSql
