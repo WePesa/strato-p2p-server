@@ -29,7 +29,7 @@ import           Blockchain.Data.Wire
 import           Blockchain.Display
 import           Blockchain.Event
 import           Blockchain.Frame
-import           Blockchain.ModTMChan
+import           Blockchain.ExtMergeSources
 import           Blockchain.BlockNotify
 import           Blockchain.RawTXNotify
 import           Blockchain.RLPx
@@ -85,7 +85,7 @@ runEthServer connStr myPriv listenPort = do
             blockSource = blockNotificationSource (contextSQLDB cxt) 
                       =$= CL.map (uncurry NewBL)
 
-        eventSource <- mergeSources [
+        eventSource <- mergeSourcesCloseForAny [
           rSource =$=
           appSource app =$=
           ethDecrypt inCxt =$=

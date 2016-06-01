@@ -23,6 +23,7 @@ executable strato
   main-is:             Strato.hs
   build-depends:       base,
                        blockapps-util,
+                       directory,
                        ethereum-discovery,
                        ethereum-vm,
                        hflags,
@@ -31,7 +32,9 @@ executable strato
                        strato-index,
                        strato-p2p-client,
                        strato-p2p-server,
-                       strato-quarry
+                       strato-quarry,
+                       transformers,
+                       unix
                        
   ghc-options:         -Wall -O2 
   hs-source-dirs: exec_src
@@ -84,7 +87,6 @@ library
                    Blockchain.RawTXNotify,
                    Blockchain.ServOptions
                    Executable.StratoP2PServer
-  other-modules: Blockchain.ModTMChan
   hs-source-dirs:      src
   default-language:    Haskell2010
 
