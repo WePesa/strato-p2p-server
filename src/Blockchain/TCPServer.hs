@@ -75,7 +75,7 @@ runEthServer connStr myPriv listenPort = do
       (_, (outCxt, inCxt)) <-
             liftIO $
             appSource app $$+
-            ethCryptAccept myPriv (pPeerPubkey unwrappedPeer) `fuseUpstream`
+            ethCryptAccept myPriv (fromMaybe (error "connecting peer didn't send me its pubkey") $ pPeerPubkey unwrappedPeer) `fuseUpstream`
             appSink app
 
       runEthCryptMLite cxt $ do
