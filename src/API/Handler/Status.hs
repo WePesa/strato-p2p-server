@@ -9,5 +9,5 @@ import API.Model.Status
 import API.Route.Status
 
 statusGet :: Server StatusAPI
-statusGet = return $ Status "All good!" "now"
+statusGet = return $ P2PServerStatus "All good!" "now"
 

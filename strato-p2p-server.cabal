@@ -73,10 +73,12 @@ library
                        text,
                        time,
                        transformers,
+                       servant-client,
                        servant-server,
                        wai, 
                        warp,
-                       aeson
+                       aeson,
+                       either
  
   exposed-modules:
                    Blockchain.CommunicationConduit
@@ -89,6 +91,8 @@ library
                    Blockchain.ServOptions,
                    Executable.StratoP2PServer,
                    API.StratoP2PServer
+                   API.StratoP2PServerClient
+
   other-modules: Blockchain.ModTMChan,
                  API.Handler.Status,
                  API.Model.Status,
