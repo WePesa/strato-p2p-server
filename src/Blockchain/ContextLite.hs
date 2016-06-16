@@ -52,6 +52,7 @@ initContextLite :: (MonadResource m, MonadIO m, MonadBaseControl IO m) => SQL.Co
 initContextLite _ = do
   dbs <- openDBs
   return Context {
+                    actionTimestamp = Nothing,
                     contextSQLDB = sqlDB' dbs,                    
                     blockHeaders=[],
                     vmTrace=[]
