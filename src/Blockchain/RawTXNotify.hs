@@ -10,9 +10,11 @@ import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
 import qualified Data.ByteString.Char8 as BC
+import Data.String
 import qualified Data.Text as T
 import qualified Database.Persist as SQL
-import qualified Database.Persist.Sql as SQL
+import qualified Database.Persist.Postgresql as SQL
+--import qualified Database.Persist.Sql as SQL
 import qualified Database.PostgreSQL.Simple as PS
 import Database.PostgreSQL.Simple.Notification
 
@@ -21,28 +23,31 @@ import Blockchain.DB.SQLDB
 import Blockchain.EthConf
 
 createTXTrigger::(MonadIO m, MonadLogger m)=>
-                 m ()
-createTXTrigger = do
+                 String->m ()
+createTXTrigger name = do
   conn <- liftIO $ PS.connectPostgreSQL connStr
-  res2 <- liftIO $ PS.execute_ conn "DROP TRIGGER IF EXISTS tx_notify ON raw_transaction;\n\
-\CREATE OR REPLACE FUNCTION tx_notify() RETURNS TRIGGER AS $tx_notify$ \n\ 
+  res2 <- liftIO $ PS.execute_ conn $ fromString $ "DROP TRIGGER IF EXISTS " ++ name ++ " ON raw_transaction;\n\
+\CREATE OR REPLACE FUNCTION " ++ name ++ "() RETURNS TRIGGER AS $" ++ name ++ "$ \n\ 
     \ BEGIN \n\
     \     PERFORM pg_notify('new_transaction', NEW.id::text ); \n\
     \     RETURN NULL; \n\
     \ END; \n\
-\ $tx_notify$ LANGUAGE plpgsql; \n\
-\ CREATE TRIGGER tx_notify AFTER INSERT OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE tx_notify();"
+\ $" ++ name ++ "$ LANGUAGE plpgsql; \n\
+\ CREATE TRIGGER " ++ name ++ " AFTER INSERT OR DELETE ON raw_transaction FOR EACH ROW EXECUTE PROCEDURE " ++ name ++ "();"
 
   liftIO $ PS.close conn
 
   logInfoN $ T.pack $ "created trigger with result: " ++ (show res2)
 
 
-txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadLogger m, MonadResource m)=>
-                      SQLDB->Source m RawTransaction
-txNotificationSource pool = do
+txNotificationSource::(MonadIO m, MonadBaseControl IO m, MonadResource m, MonadLogger m)=>
+                      String->Source m RawTransaction
+txNotificationSource name = do
   conn <- liftIO $ PS.connectPostgreSQL connStr
   _ <- register $ PS.close conn
+
+  pool <- liftIO $ runNoLoggingT $ SQL.createPostgresqlPool connStr' 20
+  lift $ createTXTrigger name
 
   forever $ do
     _ <- liftIO $ PS.execute_ conn "LISTEN new_transaction;"

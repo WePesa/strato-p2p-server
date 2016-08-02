@@ -62,7 +62,7 @@ runEthServer connStr myPriv listenPort = do
 
     let myPubkey = calculatePublic theCurve myPriv
 
-    createTXTrigger
+    createTXTrigger "tx_notify"
     createBlockTrigger
        
     runGeneralTCPServer (serverSettings listenPort "*") $ \app -> do
@@ -80,7 +80,7 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt $ do
         let rSource = appSource app
-            txSource = txNotificationSource (contextSQLDB cxt) 
+            txSource = txNotificationSource "tx_notify"
                       =$= CL.map NewTX
             blockSource = blockNotificationSource (contextSQLDB cxt) 
                       =$= CL.map (uncurry NewBL)
