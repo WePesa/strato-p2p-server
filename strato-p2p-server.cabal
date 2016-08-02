@@ -78,15 +78,16 @@ library
                        transformers
  
   exposed-modules:
-                   Blockchain.CommunicationConduit
-                   Blockchain.ContextLite,
-                   Blockchain.BlockSynchronizerSql,
-                   Blockchain.TCPServer,
-                   Blockchain.P2PUtil,
-                   Blockchain.BlockNotify,
-                   Blockchain.RawTXNotify,
                    Blockchain.ServOptions
                    Executable.StratoP2PServer
+  other-modules:
+                   Blockchain.TCPServer
+                   Blockchain.CommunicationConduit
+                   Blockchain.ContextLite
+                   Blockchain.BlockSynchronizerSql
+                   Blockchain.P2PUtil
+                   Blockchain.BlockNotify
+                   Blockchain.RawTXNotify
   hs-source-dirs:      src
   default-language:    Haskell2010
 
