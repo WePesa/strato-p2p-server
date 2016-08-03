@@ -86,7 +86,6 @@ library
                    Blockchain.ContextLite
                    Blockchain.BlockSynchronizerSql
                    Blockchain.P2PUtil
-                   Blockchain.BlockNotify
   hs-source-dirs:      src
   default-language:    Haskell2010
 
