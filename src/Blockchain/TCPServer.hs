@@ -22,7 +22,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
 import           Blockchain.CommunicationConduit
-import           Blockchain.Context
 import           Blockchain.ContextLite
 import           Blockchain.Data.RLP
 import           Blockchain.Data.Wire
@@ -62,8 +61,8 @@ runEthServer connStr myPriv listenPort = do
 
     let myPubkey = calculatePublic theCurve myPriv
 
-    createTXTrigger "tx_notify"
-    createBlockTrigger
+    createTXTrigger "tx"
+    createBlockTrigger "p2p_block"
        
     runGeneralTCPServer (serverSettings listenPort "*") $ \app -> do
       logInfoN $ T.pack $ "|||| Incoming connection from " ++ show (appSockAddr app)
@@ -80,9 +79,9 @@ runEthServer connStr myPriv listenPort = do
 
       runEthCryptMLite cxt $ do
         let rSource = appSource app
-            txSource = txNotificationSource "tx_notify"
+            txSource = txNotificationSource "tx"
                       =$= CL.map NewTX
-            blockSource = blockNotificationSource (contextSQLDB cxt) 
+            blockSource = blockNotificationSource "p2p_block"
                       =$= CL.map (uncurry NewBL)
 
         eventSource <- mergeSourcesCloseForAny [
