@@ -21,7 +21,7 @@ import Blockchain.Event
 import Blockchain.ServOptions
 
 ethVersion :: Int
-ethVersion = 61
+ethVersion = 62
 
 awaitMsg::MonadIO m=>ConduitM Event Message m (Maybe Message)
 awaitMsg = do
