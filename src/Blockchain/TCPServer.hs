@@ -46,7 +46,7 @@ import qualified Database.Persist.Postgresql as SQL
 
 
 
-import           Blockchain.Data.DataDefs
+import           Blockchain.Data.Peer
 
 import           Blockchain.P2PUtil
 

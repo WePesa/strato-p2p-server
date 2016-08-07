@@ -22,7 +22,7 @@ import Control.Monad.Trans.Resource
 import Blockchain.Context
 import Blockchain.DBM
 import Blockchain.DB.SQLDB
-import Blockchain.Data.DataDefs
+import Blockchain.Data.Peer
 
 import qualified Database.Persist.Postgresql as SQL
 import qualified Database.PostgreSQL.Simple as PS

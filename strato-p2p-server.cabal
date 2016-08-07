@@ -55,6 +55,7 @@ library
                        crypto-pubkey,
                        crypto-pubkey-types,
                        cryptohash,
+                       ethereum-discovery,
                        ethereum-encryption,
                        esqueleto,
                        ethereum-rlp,
