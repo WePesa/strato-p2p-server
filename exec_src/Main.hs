@@ -11,12 +11,12 @@ import Executable.StratoP2PServer
 
 main :: IO ()
 main = do
-  args <- $initHFlags "Strato Peer Server"
+  _ <- $initHFlags "Strato Peer Server"
 
   if flags_runUDPServer 
     then do
       putStrLn "Starting UDP server"
-      _ <- forkIO $ flip runLoggingT printLogMsg $ ethereumDiscovery args
+      _ <- forkIO $ flip runLoggingT printLogMsg ethereumDiscovery
       return ()
     else putStrLn "UDP server disabled"
 
