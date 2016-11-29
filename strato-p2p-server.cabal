@@ -52,6 +52,7 @@ library
                        conduit,
                        conduit-combinators,
                        conduit-extra,
+                       containers,
                        crypto-pubkey,
                        crypto-pubkey-types,
                        cryptohash,
@@ -61,9 +62,11 @@ library
                        ethereum-rlp,
                        haskoin,
                        hflags,
+                       json-rpc-server,
                        lifted-async,
                        lifted-base,
                        monad-logger,
+                       monadIO,
                        mtl,
                        network,
                        persistent,
@@ -87,6 +90,7 @@ library
                    Blockchain.ContextLite
                    Blockchain.BlockSynchronizerSql
                    Blockchain.P2PUtil
+                   Executable.StratoP2PServerComm
   hs-source-dirs:      src
   default-language:    Haskell2010
 

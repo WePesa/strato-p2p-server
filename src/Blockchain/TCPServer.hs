@@ -15,11 +15,14 @@ import qualified Data.Text as T
 import Crypto.Types.PubKey.ECC
 
 import           Control.Applicative
+import Control.Concurrent.STM.MonadIO
 import           Control.Monad
 import           Control.Monad.Logger
 
+
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Set as S
 
 import           Blockchain.CommunicationConduit
 import           Blockchain.ContextLite
@@ -55,8 +58,8 @@ theCurve::Curve
 theCurve = getCurveByName SEC_p256k1
 
 runEthServer::(MonadResource m, MonadIO m, MonadBaseControl IO m, MonadLogger m)=>
-              SQL.ConnectionString->PrivateNumber->Int->m ()
-runEthServer connStr myPriv listenPort = do  
+              TVar (S.Set String)->SQL.ConnectionString->PrivateNumber->Int->m ()
+runEthServer connectedPeers connStr myPriv listenPort = do  
     cxt <- initContextLite connStr
 
     let myPubkey = calculatePublic theCurve myPriv
@@ -66,6 +69,7 @@ runEthServer connStr myPriv listenPort = do
        
     runGeneralTCPServer (serverSettings listenPort "*") $ \app -> do
       logInfoN $ T.pack $ "|||| Incoming connection from " ++ show (appSockAddr app)
+      _ <- modifyTVar connectedPeers (S.insert $ show $ appSockAddr app)
       peer <- fmap fst $ runResourceT $ flip runStateT cxt $ getPeerByIP (sockAddrToIP $ appSockAddr app)
       let unwrappedPeer = case (SQL.entityVal <$> peer) of 
                             Nothing -> error "peer is nothing after call to getPeerByIP"
@@ -106,6 +110,11 @@ runEthServer connStr myPriv listenPort = do
           transPipe liftIO (appSink app)
 
         logInfoN "server session ended"
+
+        _ <- modifyTVar connectedPeers (S.delete $ show $ appSockAddr app)
+
+        return ()
+
 
 --cbSafeTake::Monad m=>Int->Consumer B.ByteString m B.ByteString
 cbSafeTake::Monad m=>Int->ConduitM BC.ByteString o m BC.ByteString
