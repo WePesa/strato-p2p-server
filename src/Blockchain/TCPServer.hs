@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module Blockchain.TCPServer (
   runEthServer
   ) where
+
+import Control.Exception.Lifted
 
 import           Conduit
 import qualified Data.Conduit.List as CL
@@ -102,12 +105,13 @@ runEthServer connectedPeers connStr myPriv listenPort = do
 
         logInfoN "server session starting"
 
-        eventSource =$=
-          handleMsgConduit myPubkey unwrappedPeer =$=
-          transPipe lift (tap (displayMessage True (show $ appSockAddr app))) =$=
-          messagesToBytes =$=
-          ethEncrypt outCxt $$
-          transPipe liftIO (appSink app)
+        (_::Either SomeException ()) <- try $ 
+                 eventSource =$=
+                   handleMsgConduit myPubkey unwrappedPeer =$=
+                   transPipe lift (tap (displayMessage True (show $ appSockAddr app))) =$=
+                   messagesToBytes =$=
+                   ethEncrypt outCxt $$
+                   transPipe liftIO (appSink app)
 
         logInfoN "server session ended"
 
