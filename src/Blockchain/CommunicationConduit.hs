@@ -11,10 +11,11 @@ import Control.Monad.Logger
 import Control.Monad.State
 import Crypto.Types.PubKey.ECC
 
+import Blockchain.BlockSynchronizerSql
+import Blockchain.Constants hiding (ethVersion)
+import Blockchain.Context
 import Blockchain.Data.Peer
 import Blockchain.Data.Wire
-import Blockchain.Context
-import Blockchain.BlockSynchronizerSql
 import Blockchain.DB.DetailsDB hiding (getBestBlockHash)
 import Blockchain.DB.SQLDB
 import Blockchain.Event
@@ -41,7 +42,7 @@ handleMsgConduit myPubkey peer = do
    Just Hello{} -> do
          let helloMsg' = Hello {
                version = 4,
-               clientId = "Ethereum(G)/v0.6.4//linux/Haskell",
+               clientId = stratoVersionString,
                capability = [ETH (fromIntegral  ethVersion ) ], -- , SHH shhVersion],
                port = 0, -- formerly 30303
                nodeId = myPubkey
